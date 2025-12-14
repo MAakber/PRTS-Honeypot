@@ -1,0 +1,5 @@
+{
+  "name": "PRTS Honeypot System ProMAX",
+  "description": "An Arknights-styled honeypot management system with threat perception, attack analysis via Gemini AI, and environment management.",
+  "requestFramePermissions": []
+}

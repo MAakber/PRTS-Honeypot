@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PRTS Honeypot System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        /* Light Mode (Sterile Lab) */
+        --ark-bg: #f0f2f5;
+        --ark-panel: #ffffff;
+        --ark-text: #1f1f1f;
+        --ark-subtext: #64748b;
+        --ark-border: #e2e8f0;
+        --ark-primary: #23ade5;
+        --ark-active-bg: rgba(35, 173, 229, 0.1);
+      }
+      .dark {
+        /* Dark Mode (Combat Terminal) */
+        --ark-bg: #121212;
+        --ark-panel: #1a1a1a;
+        --ark-text: #e0e0e0;
+        --ark-subtext: #a0a0a0;
+        --ark-border: #333333;
+        --ark-primary: #23ade5;
+        --ark-active-bg: rgba(35, 173, 229, 0.1);
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--ark-bg); 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--ark-border); 
+        border: 1px solid var(--ark-bg);
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--ark-primary); 
+      }
+      .clip-corner-br {
+        clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+      }
+      .clip-corner-tl-br {
+        clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Rajdhani', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              ark: {
+                bg: 'var(--ark-bg)',
+                panel: 'var(--ark-panel)',
+                text: 'var(--ark-text)',
+                subtext: 'var(--ark-subtext)',
+                border: 'var(--ark-border)',
+                primary: 'var(--ark-primary)',
+                active: 'var(--ark-active-bg)',
+                accent: '#ffd700', // Warning Gold
+                danger: '#ff4d4f', // Enemy Red
+              }
+            },
+            keyframes: {
+              'slide-in-right': {
+                '0%': { transform: 'translateX(100%)', opacity: '0' },
+                '100%': { transform: 'translateX(0)', opacity: '1' },
+              },
+              'slide-out-right': {
+                '0%': { transform: 'translateX(0)', opacity: '1' },
+                '100%': { transform: 'translateX(100%)', opacity: '0' },
+              }
+            },
+            animation: {
+              'slide-in-right': 'slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'slide-out-right': 'slide-out-right 0.3s ease-in forwards',
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.10.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-ark-bg text-ark-text overflow-hidden transition-colors duration-300">
+    <div id="root"></div>
+  </body>
+</html>
