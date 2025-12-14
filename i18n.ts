@@ -460,11 +460,22 @@ export const translations = {
     sc_redoc_desc: "Static, clean documentation generation for integration reference.",
     sc_view_docs: "VIEW DOCS",
 
+    // AI API Config (New)
+    sc_ai_title: "AI Configuration",
+    sc_ai_subtitle: "Configure Generative AI for automated threat analysis",
+    sc_ai_enable: "Enable AI Analysis",
+    sc_ai_provider: "Provider",
+    sc_ai_model: "Model Name",
+    sc_ai_apikey: "API Key",
+    sc_ai_endpoint: "Custom Endpoint (Optional)",
+    sc_ai_desc: "Utilize LLMs to analyze attack payloads and generate mitigation strategies.",
+
     // Notification Config
     sc_notif_title: "Notification Configuration",
     sc_notif_subtitle: "Configure alerts for critical system events",
     sc_notif_email: "Email Notifications",
     sc_notif_syslog: "Syslog Forwarding",
+    sc_notif_ws: "Websocket Connection",
     sc_notif_webhook: "Webhook Integration",
     sc_notif_smtp_server: "SMTP Server",
     sc_notif_smtp_port: "Port",
@@ -474,6 +485,9 @@ export const translations = {
     sc_notif_syslog_server: "Syslog Server IP",
     sc_notif_syslog_proto: "Protocol",
     sc_notif_webhook_url: "Webhook URL",
+    sc_notif_ws_url: "Server URL",
+    sc_notif_ws_token: "Auth Token (Optional)",
+    sc_notif_ws_events: "Subscribed Events",
     sc_notif_enable: "Enable",
     
     // Database Config
@@ -650,14 +664,14 @@ export const translations = {
     sd_diagram_extract: "Sample Extraction",
     sd_diagram_cloud: "Cloud Sample DB",
     sd_diagram_sandbox: "Cloud Sandbox",
-    
+
     sd_filter_file: "File Name",
     sd_filter_honey: "Attacked Honeypot",
     sd_filter_node: "Attacked Node",
-    sd_filter_arch: "Capture Node Arch",
-    sd_filter_count: "Capture Count",
-    sd_filter_status: "Detection Status",
-    sd_filter_threat: "Threat Level",
+    sd_filter_arch: "获取节点架构",
+    sd_filter_count: "捕获次数",
+    sd_filter_status: "检测状态",
+    sd_filter_threat: "威胁等级",
     
     sd_status_completed: "Completed",
     sd_status_analyzing: "Analyzing",
@@ -687,7 +701,7 @@ export const translations = {
     
     vs_diagram_attacker: "Attacker",
     vs_diagram_try: "Try Attack",
-    vs_diagram_node: "Honeypot Node",
+    vs_diagram_node: "PRTS节点端",
     vs_diagram_data: "Attack Data",
     vs_diagram_engine: "Detect Engine",
     vs_diagram_result: "Detection Result",
@@ -1196,11 +1210,22 @@ export const translations = {
     sc_redoc_desc: "用于集成参考的静态、简洁文档生成。",
     sc_view_docs: "查看文档",
 
+    // AI API Config (New)
+    sc_ai_title: "AI 接口配置",
+    sc_ai_subtitle: "配置生成式 AI 以进行自动威胁分析",
+    sc_ai_enable: "启用 AI 分析",
+    sc_ai_provider: "服务提供商",
+    sc_ai_model: "模型名称",
+    sc_ai_apikey: "API 密钥",
+    sc_ai_endpoint: "自定义端点 (可选)",
+    sc_ai_desc: "利用大语言模型分析攻击载荷并生成防御策略。",
+
     // Notification Config
     sc_notif_title: "通知配置",
     sc_notif_subtitle: "配置系统关键事件报警",
     sc_notif_email: "邮件通知",
     sc_notif_syslog: "Syslog 转发",
+    sc_notif_ws: "Websocket 连接",
     sc_notif_webhook: "Webhook 集成",
     sc_notif_smtp_server: "SMTP 服务器",
     sc_notif_smtp_port: "端口",
@@ -1210,6 +1235,9 @@ export const translations = {
     sc_notif_syslog_server: "Syslog 服务器 IP",
     sc_notif_syslog_proto: "协议",
     sc_notif_webhook_url: "Webhook URL",
+    sc_notif_ws_url: "服务器地址",
+    sc_notif_ws_token: "认证 Token (可选)",
+    sc_notif_ws_events: "订阅事件",
     sc_notif_enable: "启用",
     
     // Database Config
@@ -1423,7 +1451,7 @@ export const translations = {
     
     vs_diagram_attacker: "尝试攻击",
     vs_diagram_try: "攻击者",
-    vs_diagram_node: "HFish节点端",
+    vs_diagram_node: "PRTS节点端",
     vs_diagram_data: "攻击数据",
     vs_diagram_engine: "检测引擎",
     vs_diagram_result: "检测行为结果",

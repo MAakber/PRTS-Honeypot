@@ -46,17 +46,22 @@ const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
     };
 
     return (
-        <div className="flex flex-wrap items-center justify-around gap-4 py-4 w-full">
-             <ArkHexagon 
-                label={t('chain_attack_ip', lang as any)} 
-                value="846" 
-                size="lg" 
-                icon={<Globe size={24} />} 
-                color={getColor(modules.attackSource, 'var(--ark-primary)')}
-                onClick={() => navigate('/threat-entities/sources')}
-                className={!modules.attackSource ? 'opacity-70 grayscale' : ''}
-             />
-             <div className="hidden md:block h-[1px] flex-1 bg-gradient-to-r from-transparent via-ark-primary/50 to-transparent mx-4 relative top-[-10px]" />
+        <div className="flex flex-col xl:flex-row items-center justify-center gap-6 py-4 w-full px-4 md:px-8">
+             <div className="flex-shrink-0">
+                 <ArkHexagon 
+                    label={t('chain_attack_ip', lang as any)} 
+                    value="846" 
+                    size="lg" 
+                    icon={<Globe size={24} />} 
+                    color={getColor(modules.attackSource, 'var(--ark-primary)')}
+                    onClick={() => navigate('/threat-entities/sources')}
+                    className={!modules.attackSource ? 'opacity-70 grayscale' : ''}
+                 />
+             </div>
+             
+             {/* Divider Line: Hidden on tablet/mobile, visible on XL screens */}
+             <div className="hidden xl:block h-[1px] flex-1 bg-gradient-to-r from-transparent via-ark-primary/50 to-transparent mx-4" />
+             
              <div className="flex gap-3 flex-wrap justify-center">
                  <ArkHexagon 
                     label={t('chain_scanning', lang as any)} 

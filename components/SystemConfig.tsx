@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { ArkButton, ArkPageHeader, ArkInput, ArkCard } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { FileText, Bell, Webhook, Database, Key, LayoutGrid, Clock, Share2, Save, Terminal, Shield, Plus, Copy, RefreshCw, Trash2, ExternalLink, Mail, HardDrive, Lock, Image, MapPin, Radio, Upload, User, LogIn, Activity, Users, X } from 'lucide-react';
+import { FileText, Bell, Webhook, Database, Key, LayoutGrid, Clock, Share2, Save, Terminal, Shield, Plus, Copy, RefreshCw, Trash2, ExternalLink, Mail, HardDrive, Lock, Image, MapPin, Radio, Upload, User, LogIn, Activity, Users, X, Sparkles, Network } from 'lucide-react';
 import { useNotification } from './NotificationSystem';
 
 const ConfigTab: React.FC<{ 
@@ -51,30 +51,54 @@ const MOCK_LOGIN_LOGS = [
 export const SystemConfig: React.FC = () => {
     const { lang, user } = useApp();
     const { notify } = useNotification();
-    const [activeTab, setActiveTab] = useState('notification');
+    const [activeTab, setActiveTab] = useState('intel');
     const [isSaving, setIsSaving] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     
-    // API State
+    // --- Configuration States ---
+
+    // Intel
+    const [intelConfig, setIntelConfig] = useState({ 
+        provider: 'ThreatBook Online (API)', 
+        url: 'https://api.threatbook.cn', 
+        key: '7d991********5ea26' 
+    });
+
+    // API
     const [apiEnabled, setApiEnabled] = useState(true);
+    const [aiEnabled, setAiEnabled] = useState(false);
+    const [aiConfig, setAiConfig] = useState({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        apiKey: '',
+        endpoint: ''
+    });
     const [apiKeys, setApiKeys] = useState([
         { id: 'ak_1001', key: 'prts_sk_9a8b...1f2e', desc: 'Main Server Link', created: '2025/11/20', status: 'active' },
         { id: 'ak_1002', key: 'prts_sk_3c4d...5g6h', desc: 'Log Collector', created: '2025/11/22', status: 'active' },
         { id: 'ak_1003', key: 'prts_sk_7i8j...9k0l', desc: 'Dev Test', created: '2025/12/01', status: 'revoked' },
     ]);
 
-    // Notif State
+    // Notification
     const [emailEnabled, setEmailEnabled] = useState(false);
+    const [emailConfig, setEmailConfig] = useState({ server: '', port: '', user: '', pass: '', recipient: '' });
+    
     const [syslogEnabled, setSyslogEnabled] = useState(true);
+    const [syslogConfig, setSyslogConfig] = useState({ server: '', protocol: 'UDP' });
+    
+    const [wsEnabled, setWsEnabled] = useState(false);
+    const [wsConfig, setWsConfig] = useState({ url: '', token: '', events: '' });
 
-    // Tracing State
+    // Tracing
     const [traceEnabled, setTraceEnabled] = useState(true);
+    const [traceConfig, setTraceConfig] = useState({ provider: 'IP-API Pro', key: '', visual: 'Cesium 3D Globe' });
 
-    // Login Management State
+    // Login Policy
+    const [loginPolicy, setLoginPolicy] = useState({ maxRetry: 5, lockout: 30, session: 120, url: 'login_v2', whitelist: '' });
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     
-    // User Management State
+    // User Management
     const [userList, setUserList] = useState([
         { id: 1, username: 'admin', role: 'admin', status: 'active', lastLogin: '2025-12-06 10:23:45' },
         { id: 2, username: 'operator01', role: 'operator', status: 'active', lastLogin: '2025-12-05 09:30:00' },
@@ -82,18 +106,86 @@ export const SystemConfig: React.FC = () => {
     const [showUserModal, setShowUserModal] = useState(false);
     const [newUserForm, setNewUserForm] = useState({ username: '', password: '', role: 'admin' });
 
-    // Database Connection State
+    // Database
     const [dbType, setDbType] = useState<'sqlite' | 'mysql'>('sqlite');
     const [mysqlConfig, setMysqlConfig] = useState({ host: '127.0.0.1', port: '3306', user: 'root', pass: '', db: 'prts_honeypot' });
     const [sqlitePath, setSqlitePath] = useState('./data/prts.db');
+    const [dbRetention, setDbRetention] = useState(180);
 
-    const handleSave = () => {
+    // Custom
+    const [customConfig, setCustomConfig] = useState({ name: 'PRTS HONEYPOT', copyright: '© 2025 RHODES ISLAND' });
+
+    // NTP
+    const [ntpConfig, setNtpConfig] = useState({ server: 'pool.ntp.org', interval: 60 });
+
+
+    // --- Actions ---
+
+    // Mock Backend Save
+    const saveConfigToBackend = async (module: string, data: any) => {
         setIsSaving(true);
-        // Simulate save operation
-        setTimeout(() => {
-            setIsSaving(false);
+        console.group(`[PRTS Mock Backend] Saving Module: ${module}`);
+        console.log("Payload:", JSON.stringify(data, null, 2));
+        console.groupEnd();
+        
+        // Simulate network delay
+        return new Promise<void>((resolve) => {
+            setTimeout(() => {
+                setIsSaving(false);
+                resolve();
+            }, 800);
+        });
+    };
+
+    const handleSave = async () => {
+        let payload = {};
+        const moduleName = activeTab.toUpperCase();
+
+        switch (activeTab) {
+            case 'intel':
+                payload = { intel: intelConfig };
+                break;
+            case 'api':
+                payload = { 
+                    api: { enabled: apiEnabled }, 
+                    ai: { enabled: aiEnabled, config: aiConfig } 
+                };
+                break;
+            case 'notification':
+                payload = {
+                    email: { enabled: emailEnabled, config: emailConfig },
+                    syslog: { enabled: syslogEnabled, config: syslogConfig },
+                    ws: { enabled: wsEnabled, config: wsConfig }
+                };
+                break;
+            case 'db':
+                payload = {
+                    connection: dbType === 'sqlite' ? { type: 'sqlite', path: sqlitePath } : { type: 'mysql', config: mysqlConfig },
+                    retentionDays: dbRetention
+                };
+                break;
+            case 'login':
+                payload = { policy: loginPolicy };
+                break;
+            case 'custom':
+                payload = { branding: customConfig };
+                break;
+            case 'ntp':
+                payload = { ntp: ntpConfig };
+                break;
+            case 'tracing':
+                payload = { tracing: { enabled: traceEnabled, config: traceConfig } };
+                break;
+            default:
+                payload = { error: "Unknown module" };
+        }
+
+        try {
+            await saveConfigToBackend(moduleName, payload);
             notify('success', t('op_success', lang), t('op_save_success', lang));
-        }, 1000);
+        } catch (error) {
+            notify('error', t('op_failed', lang), "Network communication failed.");
+        }
     };
 
     const handleUpdateCredentials = () => {
@@ -105,9 +197,11 @@ export const SystemConfig: React.FC = () => {
             notify('error', t('op_failed', lang), t('val_pwd_mismatch', lang));
             return;
         }
-        notify('success', t('op_success', lang), t('op_pwd_updated', lang));
-        setNewPassword('');
-        setConfirmPassword('');
+        saveConfigToBackend('CREDENTIALS', { username: user?.username, newPassword }).then(() => {
+            notify('success', t('op_success', lang), t('op_pwd_updated', lang));
+            setNewPassword('');
+            setConfirmPassword('');
+        });
     };
 
     const handleGenerateKey = () => {
@@ -210,7 +304,6 @@ export const SystemConfig: React.FC = () => {
                 {/* Main Content */}
                 <div className="flex-1 bg-ark-bg/50 p-4 md:p-8 overflow-y-auto custom-scrollbar relative">
                     
-                    {/* ... (Existing tabs: Intel, API, Notification, DB) ... */}
                     {activeTab === 'intel' && (
                         <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <ArkCard className="min-h-[400px]">
@@ -229,7 +322,11 @@ export const SystemConfig: React.FC = () => {
                                         <label className="text-sm font-bold text-ark-subtext md:text-right">{t('sc_intel_provider', lang)}</label>
                                         <div className="md:col-span-2">
                                             <div className="relative">
-                                                <select className="w-full bg-transparent border-b-2 border-ark-border px-3 py-2 text-sm outline-none focus:border-ark-primary transition-colors text-ark-text appearance-none rounded-none">
+                                                <select 
+                                                    value={intelConfig.provider}
+                                                    onChange={(e) => setIntelConfig({...intelConfig, provider: e.target.value})}
+                                                    className="w-full bg-transparent border-b-2 border-ark-border px-3 py-2 text-sm outline-none focus:border-ark-primary transition-colors text-ark-text appearance-none rounded-none"
+                                                >
                                                     <option>{t('sc_intel_source_threatbook', lang)}</option>
                                                 </select>
                                                 <div className="absolute right-0 bottom-0 h-[2px] w-0 bg-ark-primary transition-all duration-300 peer-focus:w-full"></div>
@@ -240,14 +337,23 @@ export const SystemConfig: React.FC = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-6 items-start md:items-center">
                                         <label className="text-sm font-bold text-ark-subtext md:text-right">{t('sc_intel_api_addr', lang)}</label>
                                         <div className="md:col-span-2">
-                                            <ArkInput defaultValue="https://api.threatbook.cn" className="bg-transparent" />
+                                            <ArkInput 
+                                                value={intelConfig.url} 
+                                                onChange={(e) => setIntelConfig({...intelConfig, url: e.target.value})}
+                                                className="bg-transparent" 
+                                            />
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-6 items-start md:items-center">
                                         <label className="text-sm font-bold text-ark-subtext md:text-right">{t('sc_intel_api_key', lang)}</label>
                                         <div className="md:col-span-2">
-                                            <ArkInput type="password" defaultValue="7d991********5ea26" className="bg-transparent" />
+                                            <ArkInput 
+                                                type="password" 
+                                                value={intelConfig.key} 
+                                                onChange={(e) => setIntelConfig({...intelConfig, key: e.target.value})}
+                                                className="bg-transparent" 
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -311,6 +417,72 @@ export const SystemConfig: React.FC = () => {
                                      </div>
                                  </div>
                              </ArkCard>
+
+                             <ArkCard title={t('sc_ai_title', lang)} sub={t('sc_ai_subtitle', lang)}>
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between p-4 border border-ark-border bg-ark-bg/20">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-3 bg-ark-active/20 rounded-full text-ark-primary border border-ark-primary/30 shrink-0">
+                                                <Sparkles size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-ark-text">{t('sc_ai_enable', lang)}</h4>
+                                                <p className="text-xs text-ark-subtext font-mono">{t('sc_ai_desc', lang)}</p>
+                                            </div>
+                                        </div>
+                                        <ToggleSwitch checked={aiEnabled} onChange={() => setAiEnabled(!aiEnabled)} />
+                                    </div>
+
+                                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${aiEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-mono text-ark-subtext">{t('sc_ai_provider', lang)}</label>
+                                            <div className="relative">
+                                                <select 
+                                                    value={aiConfig.provider}
+                                                    onChange={(e) => setAiConfig({...aiConfig, provider: e.target.value})}
+                                                    className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono outline-none focus:border-ark-primary appearance-none rounded-none"
+                                                >
+                                                    <option value="gemini">Google Gemini</option>
+                                                    <option value="openai">OpenAI</option>
+                                                    <option value="deepseek">DeepSeek</option>
+                                                    <option value="local">Local (Ollama)</option>
+                                                </select>
+                                                <div className="absolute right-0 bottom-0 h-[2px] w-0 bg-ark-primary transition-all duration-300 peer-focus:w-full"></div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-mono text-ark-subtext">{t('sc_ai_model', lang)}</label>
+                                            <ArkInput 
+                                                value={aiConfig.model} 
+                                                onChange={(e) => setAiConfig({...aiConfig, model: e.target.value})} 
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2 space-y-1">
+                                            <label className="text-xs font-mono text-ark-subtext">{t('sc_ai_apikey', lang)}</label>
+                                            <ArkInput 
+                                                type="password" 
+                                                placeholder="sk-..." 
+                                                value={aiConfig.apiKey} 
+                                                onChange={(e) => setAiConfig({...aiConfig, apiKey: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2 space-y-1">
+                                            <label className="text-xs font-mono text-ark-subtext">{t('sc_ai_endpoint', lang)}</label>
+                                            <ArkInput 
+                                                placeholder="https://generativelanguage.googleapis.com" 
+                                                value={aiConfig.endpoint} 
+                                                onChange={(e) => setAiConfig({...aiConfig, endpoint: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end pt-4 border-t border-ark-border/50">
+                                        <ArkButton onClick={handleSave} size="sm" loading={isSaving}>
+                                            <Save size={14} className="mr-2"/> {t('sc_btn_save', lang)}
+                                        </ArkButton>
+                                    </div>
+                                </div>
+                            </ArkCard>
 
                              <ArkCard title={t('sc_api_key_mgmt', lang)}>
                                  <div className="flex justify-end mb-4">
@@ -380,23 +552,43 @@ export const SystemConfig: React.FC = () => {
                                         <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${emailEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_smtp_server', lang)}</label>
-                                                <ArkInput placeholder="smtp.example.com" />
+                                                <ArkInput 
+                                                    placeholder="smtp.example.com" 
+                                                    value={emailConfig.server}
+                                                    onChange={e => setEmailConfig({...emailConfig, server: e.target.value})}
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_smtp_port', lang)}</label>
-                                                <ArkInput placeholder="587" />
+                                                <ArkInput 
+                                                    placeholder="587" 
+                                                    value={emailConfig.port}
+                                                    onChange={e => setEmailConfig({...emailConfig, port: e.target.value})}
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_smtp_user', lang)}</label>
-                                                <ArkInput placeholder="admin@rhodes.com" />
+                                                <ArkInput 
+                                                    placeholder="admin@rhodes.com" 
+                                                    value={emailConfig.user}
+                                                    onChange={e => setEmailConfig({...emailConfig, user: e.target.value})}
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_smtp_pass', lang)}</label>
-                                                <ArkInput type="password" />
+                                                <ArkInput 
+                                                    type="password" 
+                                                    value={emailConfig.pass}
+                                                    onChange={e => setEmailConfig({...emailConfig, pass: e.target.value})}
+                                                />
                                             </div>
                                             <div className="md:col-span-2 space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_recipient', lang)}</label>
-                                                <ArkInput placeholder="security@rhodes.com" />
+                                                <ArkInput 
+                                                    placeholder="security@rhodes.com" 
+                                                    value={emailConfig.recipient}
+                                                    onChange={e => setEmailConfig({...emailConfig, recipient: e.target.value})}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -410,14 +602,57 @@ export const SystemConfig: React.FC = () => {
                                         <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${syslogEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
                                             <div className="md:col-span-2 space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_syslog_server', lang)}</label>
-                                                <ArkInput placeholder="192.168.1.50:514" />
+                                                <ArkInput 
+                                                    placeholder="192.168.1.50:514" 
+                                                    value={syslogConfig.server}
+                                                    onChange={e => setSyslogConfig({...syslogConfig, server: e.target.value})}
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_syslog_proto', lang)}</label>
-                                                <select className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono">
+                                                <select 
+                                                    value={syslogConfig.protocol}
+                                                    onChange={e => setSyslogConfig({...syslogConfig, protocol: e.target.value})}
+                                                    className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono"
+                                                >
                                                     <option>UDP</option>
                                                     <option>TCP</option>
                                                 </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Websocket Section */}
+                                    <div className="bg-ark-bg/20 p-4 border border-ark-border relative">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="flex items-center gap-2 font-bold text-ark-text"><Network size={16} /> {t('sc_notif_ws', lang)}</h4>
+                                            <ToggleSwitch checked={wsEnabled} onChange={() => setWsEnabled(!wsEnabled)} />
+                                        </div>
+                                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${wsEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
+                                            <div className="md:col-span-2 space-y-1">
+                                                <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_ws_url', lang)}</label>
+                                                <ArkInput 
+                                                    placeholder="ws://192.168.1.50:8080/ws" 
+                                                    value={wsConfig.url}
+                                                    onChange={e => setWsConfig({...wsConfig, url: e.target.value})}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_ws_token', lang)}</label>
+                                                <ArkInput 
+                                                    type="password" 
+                                                    placeholder="ey..." 
+                                                    value={wsConfig.token}
+                                                    onChange={e => setWsConfig({...wsConfig, token: e.target.value})}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-xs font-mono text-ark-subtext">{t('sc_notif_ws_events', lang)}</label>
+                                                <ArkInput 
+                                                    placeholder="alert, system, report" 
+                                                    value={wsConfig.events}
+                                                    onChange={e => setWsConfig({...wsConfig, events: e.target.value})}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -513,10 +748,17 @@ export const SystemConfig: React.FC = () => {
                                         <h4 className="font-bold text-ark-text mb-4 border-b border-ark-border pb-2">{t('sc_db_retention', lang)}</h4>
                                         <div className="flex items-center gap-4">
                                             <span className="text-sm text-ark-subtext">30 Days</span>
-                                            <input type="range" min="7" max="365" defaultValue="180" className="flex-1 accent-ark-primary" />
+                                            <input 
+                                                type="range" 
+                                                min="7" 
+                                                max="365" 
+                                                value={dbRetention}
+                                                onChange={e => setDbRetention(parseInt(e.target.value))}
+                                                className="flex-1 accent-ark-primary" 
+                                            />
                                             <span className="text-sm text-ark-subtext">365 Days</span>
                                         </div>
-                                        <p className="text-center font-mono text-ark-primary font-bold mt-2">180 {t('sc_db_days', lang)}</p>
+                                        <p className="text-center font-mono text-ark-primary font-bold mt-2">{dbRetention} {t('sc_db_days', lang)}</p>
                                     </div>
 
                                     <div>
@@ -567,28 +809,48 @@ export const SystemConfig: React.FC = () => {
                                         <div className="grid grid-cols-2 gap-6">
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_login_max_retry', lang)}</label>
-                                                <ArkInput type="number" defaultValue="5" />
+                                                <ArkInput 
+                                                    type="number" 
+                                                    value={loginPolicy.maxRetry}
+                                                    onChange={e => setLoginPolicy({...loginPolicy, maxRetry: parseInt(e.target.value)})}
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_login_lockout', lang)}</label>
-                                                <ArkInput type="number" defaultValue="30" />
+                                                <ArkInput 
+                                                    type="number" 
+                                                    value={loginPolicy.lockout}
+                                                    onChange={e => setLoginPolicy({...loginPolicy, lockout: parseInt(e.target.value)})}
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_login_session', lang)}</label>
-                                                <ArkInput type="number" defaultValue="120" />
+                                                <ArkInput 
+                                                    type="number" 
+                                                    value={loginPolicy.session}
+                                                    onChange={e => setLoginPolicy({...loginPolicy, session: parseInt(e.target.value)})}
+                                                />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs font-mono text-ark-subtext">{t('sc_login_url', lang)}</label>
                                                 <div className="flex items-center">
                                                     <span className="text-xs text-ark-subtext mr-2">/admin/</span>
-                                                    <ArkInput defaultValue="login_v2" />
+                                                    <ArkInput 
+                                                        value={loginPolicy.url}
+                                                        onChange={e => setLoginPolicy({...loginPolicy, url: e.target.value})}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
                                         
                                         <div className="pt-4 border-t border-ark-border">
                                             <h4 className="font-bold text-ark-text mb-2 flex items-center gap-2"><Lock size={16}/> {t('sc_login_whitelist', lang)}</h4>
-                                            <textarea className="w-full bg-ark-bg border border-ark-border p-3 text-sm font-mono text-ark-text h-20 focus:border-ark-primary outline-none" placeholder="192.168.1.0/24"></textarea>
+                                            <textarea 
+                                                className="w-full bg-ark-bg border border-ark-border p-3 text-sm font-mono text-ark-text h-20 focus:border-ark-primary outline-none" 
+                                                placeholder="192.168.1.0/24"
+                                                value={loginPolicy.whitelist}
+                                                onChange={e => setLoginPolicy({...loginPolicy, whitelist: e.target.value})}
+                                            ></textarea>
                                         </div>
 
                                         <div className="flex justify-end">
@@ -742,11 +1004,17 @@ export const SystemConfig: React.FC = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-1">
                                             <label className="text-xs font-mono text-ark-subtext">{t('sc_custom_name', lang)}</label>
-                                            <ArkInput defaultValue="PRTS HONEYPOT" />
+                                            <ArkInput 
+                                                value={customConfig.name}
+                                                onChange={e => setCustomConfig({...customConfig, name: e.target.value})}
+                                            />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs font-mono text-ark-subtext">{t('sc_custom_copyright', lang)}</label>
-                                            <ArkInput defaultValue="© 2025 RHODES ISLAND" />
+                                            <ArkInput 
+                                                value={customConfig.copyright}
+                                                onChange={e => setCustomConfig({...customConfig, copyright: e.target.value})}
+                                            />
                                         </div>
                                     </div>
 
@@ -774,16 +1042,28 @@ export const SystemConfig: React.FC = () => {
                                     <div className="flex-1 w-full space-y-6">
                                         <div className="space-y-1">
                                             <label className="text-xs font-mono text-ark-subtext">{t('sc_ntp_server', lang)}</label>
-                                            <ArkInput defaultValue="pool.ntp.org" />
+                                            <ArkInput 
+                                                value={ntpConfig.server}
+                                                onChange={e => setNtpConfig({...ntpConfig, server: e.target.value})}
+                                            />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs font-mono text-ark-subtext">{t('sc_ntp_interval', lang)}</label>
-                                            <ArkInput type="number" defaultValue="60" />
+                                            <ArkInput 
+                                                type="number" 
+                                                value={ntpConfig.interval}
+                                                onChange={e => setNtpConfig({...ntpConfig, interval: parseInt(e.target.value)})}
+                                            />
                                         </div>
-                                        <ArkButton onClick={handleSync} className="w-full justify-center" disabled={isSyncing}>
-                                            <RefreshCw size={14} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`}/> 
-                                            {isSyncing ? t('btn_syncing', lang) : t('sc_ntp_sync_now', lang)}
-                                        </ArkButton>
+                                        <div className="flex gap-4">
+                                            <ArkButton onClick={handleSave} className="flex-1 justify-center" loading={isSaving}>
+                                                <Save size={14} className="mr-2"/> {t('sc_btn_save', lang)}
+                                            </ArkButton>
+                                            <ArkButton onClick={handleSync} className="flex-1 justify-center" disabled={isSyncing} variant="outline">
+                                                <RefreshCw size={14} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`}/> 
+                                                {isSyncing ? t('btn_syncing', lang) : t('sc_ntp_sync_now', lang)}
+                                            </ArkButton>
+                                        </div>
                                     </div>
                                     <div className="w-full md:w-64 bg-ark-bg border border-ark-border p-4 flex flex-col items-center justify-center gap-2 text-center h-full">
                                         <Clock size={32} className="text-ark-primary mb-2" />
@@ -813,7 +1093,11 @@ export const SystemConfig: React.FC = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-1">
                                             <label className="text-xs font-mono text-ark-subtext">{t('sc_trace_provider', lang)}</label>
-                                            <select className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono">
+                                            <select 
+                                                value={traceConfig.provider}
+                                                onChange={e => setTraceConfig({...traceConfig, provider: e.target.value})}
+                                                className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono"
+                                            >
                                                 <option>IP-API Pro</option>
                                                 <option>MaxMind GeoIP</option>
                                                 <option>ThreatBook Intelligence</option>
@@ -821,11 +1105,19 @@ export const SystemConfig: React.FC = () => {
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs font-mono text-ark-subtext">{t('sc_trace_apikey', lang)}</label>
-                                            <ArkInput type="password" defaultValue="*****************" />
+                                            <ArkInput 
+                                                type="password" 
+                                                value={traceConfig.key}
+                                                onChange={e => setTraceConfig({...traceConfig, key: e.target.value})}
+                                            />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs font-mono text-ark-subtext">{t('sc_trace_visual', lang)}</label>
-                                            <select className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono">
+                                            <select 
+                                                value={traceConfig.visual}
+                                                onChange={e => setTraceConfig({...traceConfig, visual: e.target.value})}
+                                                className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono"
+                                            >
                                                 <option>Cesium 3D Globe</option>
                                                 <option>2D Vector Map</option>
                                             </select>
