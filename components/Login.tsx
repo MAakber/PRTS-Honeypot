@@ -270,7 +270,7 @@ const PuzzleCaptcha: React.FC<{ onVerify: (success: boolean) => void, isVerified
                             <div className="absolute inset-0 bg-red-500/10 animate-pulse z-10 flex items-center justify-center">
                                 <div className="flex flex-col items-center text-red-500 font-bold uppercase tracking-widest text-shadow-sm opacity-80">
                                     <XCircle className="mb-1" />
-                                    <span className="text-[10px]">VERIFICATION FAILED</span>
+                                    <span className="text-[10px]">{t('login_error', lang)}</span>
                                 </div>
                             </div>
                         )}
@@ -301,7 +301,7 @@ const PuzzleCaptcha: React.FC<{ onVerify: (success: boolean) => void, isVerified
                     
                     {/* Text Hint */}
                     <div className="w-full text-center text-xs font-mono text-ark-subtext pointer-events-none uppercase tracking-widest opacity-70 absolute inset-0 flex items-center justify-center select-none">
-                        {status === 'success' ? 'SYSTEM UNLOCKED' : status === 'fail' ? 'ERROR' : t('login_drag_text', lang)}
+                        {status === 'success' ? t('login_system_unlocked', lang) : status === 'fail' ? t('login_error', lang) : t('login_drag_text', lang)}
                     </div>
                     
                     {/* Custom Handle */}
@@ -463,7 +463,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                <PuzzleCaptcha onVerify={setIsCaptchaVerified} isVerified={isCaptchaVerified} />
             </div>
 
-            {error && <p className="text-ark-danger text-xs font-mono blink flex items-center gap-2 border border-ark-danger/20 bg-ark-danger/5 p-2"><span className="w-1.5 h-1.5 bg-ark-danger rounded-full" /> {error}</p>}
+            {error && <p className="text-ark-danger text-xs font-mono blink items-center gap-2 border border-ark-danger/20 bg-ark-danger/5 p-2 flex"><span className="w-1.5 h-1.5 bg-ark-danger rounded-full" /> {error}</p>}
 
             <div className="pt-4">
               <ArkButton className="w-full h-12 text-base shadow-lg shadow-ark-primary/20" onClick={() => {}} disabled={!isCaptchaVerified}>

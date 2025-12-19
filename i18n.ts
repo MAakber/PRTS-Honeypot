@@ -189,6 +189,8 @@ const resources: Record<Lang, Record<string, string>> = {
     login_drag_text: "Drag to verify",
     login_slider_success: "Verification Passed",
     login_refresh: "Refresh",
+    login_system_unlocked: "SYSTEM UNLOCKED",
+    login_error: "ERROR",
 
     // Dashboard
     node_status: "Node Status",
@@ -895,6 +897,8 @@ const resources: Record<Lang, Record<string, string>> = {
     login_drag_text: "拖动滑块以验证",
     login_slider_success: "验证通过",
     login_refresh: "刷新",
+    login_system_unlocked: "系统已解锁",
+    login_error: "认证错误",
 
     // Dashboard
     node_status: "节点状态",
