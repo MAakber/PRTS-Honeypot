@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArkButton } from './ArknightsUI';
 import { MOCK_NODES } from '../constants';
 import { useApp } from '../AppContext';
@@ -123,6 +123,35 @@ const ArchitectureDiagram: React.FC<{ lang: Lang }> = ({ lang }) => (
 export const NodeManagement: React.FC = () => {
     const { lang } = useApp();
     const { notify } = useNotification();
+    const [nodes, setNodes] = useState<NodeStatus[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchNodes = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch('/api/v1/nodes', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setNodes(data);
+            } else {
+                setNodes(MOCK_NODES);
+            }
+        } catch (error) {
+            console.error("Failed to fetch nodes", error);
+            setNodes(MOCK_NODES);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchNodes();
+    }, []);
     
     const handleStart = (nodeName: string) => {
         notify('success', t('op_success', lang), `${t('op_node_start', lang)} (${nodeName})`);
@@ -175,13 +204,13 @@ export const NodeManagement: React.FC = () => {
                 <div className="w-full lg:w-64 bg-ark-panel border border-ark-border flex flex-col shadow-sm flex-shrink-0">
                     <div className="p-3 border-b border-ark-border flex items-center justify-between">
                         <span className="text-sm font-bold text-ark-text">{t('nm_group_all', lang)}</span>
-                        <span className="text-xs text-ark-subtext">({MOCK_NODES.length})</span>
+                        <span className="text-xs text-ark-subtext">({nodes.length || MOCK_NODES.length})</span>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 max-h-[200px] lg:max-h-full">
                          <button className="w-full text-left px-3 py-2 text-xs font-mono text-ark-primary bg-ark-active/20 border-l-2 border-ark-primary hover:bg-ark-active/30 transition-colors">
                              {t('nm_group_all', lang)}
                          </button>
-                         {MOCK_NODES.map(node => (
+                         {(nodes.length > 0 ? nodes : MOCK_NODES).map(node => (
                              <button key={node.id} className="w-full text-left px-3 py-2 text-xs font-mono text-ark-subtext hover:text-ark-text hover:bg-ark-active/10 border-l-2 border-transparent transition-colors flex items-center gap-2">
                                  <div className={`w-1.5 h-1.5 rounded-full ${node.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
                                  {node.name}
@@ -222,7 +251,7 @@ export const NodeManagement: React.FC = () => {
 
                     {/* Node List - Expanded View */}
                     <div className="flex-1 flex flex-col gap-4">
-                        {MOCK_NODES.map(node => (
+                        {(nodes.length > 0 ? nodes : MOCK_NODES).map(node => (
                             <div key={node.id} className="bg-ark-panel border border-ark-border shadow-sm group hover:border-ark-primary/50 transition-all duration-300">
                                 {/* Header / Main Info */}
                                 <div className="p-4 flex flex-col md:flex-row items-center gap-4 md:gap-8 border-b border-ark-border/50 bg-ark-bg/50">

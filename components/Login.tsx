@@ -8,7 +8,7 @@ import { useNotification } from './NotificationSystem';
 import { ParticleBackground } from './ParticleBackground';
 
 interface LoginProps {
-  onLogin: (username: string) => void;
+  onLogin: (username: string, password?: string) => Promise<boolean>;
 }
 
 // Puzzle Slider Component
@@ -356,7 +356,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -368,15 +368,21 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
 
     if (username && password) {
-      notify('success', t('notify_login_success_title', lang), t('notify_login_success_msg', lang));
+      const success = await (onLogin as any)(username, password);
       
-      if (unreadCount > 0) {
-          setTimeout(() => {
-              notify('warning', t('mc_title', lang), t('unread_alert', lang).replace('{count}', unreadCount.toString()));
-          }, 800);
+      if (success) {
+        notify('success', t('notify_login_success_title', lang), t('notify_login_success_msg', lang));
+        
+        if (unreadCount > 0) {
+            setTimeout(() => {
+                notify('warning', t('mc_title', lang), t('unread_alert', lang).replace('{count}', unreadCount.toString()));
+            }, 800);
+        }
+      } else {
+        const msg = t('access_denied', lang);
+        setError(msg);
+        notify('error', t('notify_login_failed_title', lang), msg);
       }
-
-      onLogin(username);
     } else {
       const msg = t('access_denied', lang);
       setError(msg);

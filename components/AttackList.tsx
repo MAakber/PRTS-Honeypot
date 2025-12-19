@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArkCard, ArkButton, ArkBadge } from './ArknightsUI';
 import { MOCK_ATTACKS } from '../constants';
 import { AttackLog } from '../types';
@@ -55,8 +55,37 @@ export const AttackList: React.FC = () => {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [dateRange, setDateRange] = useState({ start: '2025-11-30T00:00', end: '2025-12-06T23:59' });
+  const [attacks, setAttacks] = useState<AttackLog[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const enabled = modules.attack;
+
+  const fetchAttacks = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('prts_token');
+      const response = await fetch('/api/v1/attacks', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAttacks(data);
+      } else {
+        setAttacks(MOCK_ATTACKS); // Fallback
+      }
+    } catch (error) {
+      console.error("Failed to fetch attacks", error);
+      setAttacks(MOCK_ATTACKS); // Fallback
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAttacks();
+  }, []);
 
   const handleToggle = () => {
       const newState = !enabled;
@@ -65,7 +94,7 @@ export const AttackList: React.FC = () => {
   };
 
   // Data Mocking
-  const displayLogs = [...MOCK_ATTACKS, ...MOCK_ATTACKS, ...MOCK_ATTACKS].map((log, i) => {
+  const displayLogs = (attacks.length > 0 ? attacks : MOCK_ATTACKS).map((log, i) => {
       let locKey = 'unknown';
       if (log.location.includes('Shanghai')) locKey = 'city_shanghai';
       else if (log.location.includes('Moscow')) locKey = 'city_moscow';

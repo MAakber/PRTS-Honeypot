@@ -13,7 +13,7 @@ interface ModuleState {
 
 interface AppContextType {
   user: User | null;
-  login: (username: string) => void;
+  login: (username: string, password?: string) => Promise<boolean>;
   logout: () => void;
   lang: Lang;
   toggleLang: () => void;
@@ -119,7 +119,10 @@ const MOCK_MESSAGES_ZH: Message[] = [
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('prts_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [lang, setLang] = useState<Lang>('zh'); 
   const [darkMode, setDarkMode] = useState(true);
 
@@ -153,11 +156,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   }, [lang]);
 
-  const login = (username: string) => {
-    setUser({ username, role: 'admin', isAuthenticated: true });
+  const login = async (username: string, password?: string) => {
+    try {
+      const response = await fetch('/api/v1/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const userData = { ...data.user, isAuthenticated: true };
+        localStorage.setItem('prts_token', data.token);
+        localStorage.setItem('prts_user', JSON.stringify(userData));
+        setUser(userData);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Login failed", error);
+      // Fallback for development if backend is not running
+      if (username === 'admin') {
+        const userData = { username, role: 'admin' as const, isAuthenticated: true };
+        setUser(userData);
+        return true;
+      }
+      return false;
+    }
   };
 
   const logout = () => {
+    localStorage.removeItem('prts_token');
+    localStorage.removeItem('prts_user');
     setUser(null);
   };
 

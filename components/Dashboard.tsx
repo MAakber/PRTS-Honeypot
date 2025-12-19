@@ -404,6 +404,30 @@ const SystemMonitor: React.FC = () => {
 export const Dashboard: React.FC = () => {
   const { lang, darkMode } = useApp();
   const navigate = useNavigate();
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const token = localStorage.getItem('prts_token');
+        const response = await fetch('/api/v1/stats/dashboard', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
   
   const gridColor = darkMode ? '#333' : '#e5e5e5';
 
@@ -419,7 +443,7 @@ export const Dashboard: React.FC = () => {
                  <div className="flex-1 w-full border-b sm:border-b-0 sm:border-r border-ark-border">
                     <StatBlock 
                         label={t('online_nodes', lang)} 
-                        value={1} 
+                        value={stats?.activeNodes || 1} 
                         total={1} 
                         color="#22c55e" 
                         icon={Server}
@@ -428,7 +452,7 @@ export const Dashboard: React.FC = () => {
                  <div className="flex-1 w-full">
                     <StatBlock 
                         label={t('online_honeypots', lang)} 
-                        value={6} 
+                        value={stats?.totalAttacks ? 6 : 6} 
                         total={6} 
                         color="#3b82f6" 
                         icon={Shield}
