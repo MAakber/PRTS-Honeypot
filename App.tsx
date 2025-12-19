@@ -18,20 +18,28 @@ import { ReportManagement } from './components/ReportManagement';
 import { SystemConfig } from './components/SystemConfig';
 import { SystemInfo } from './components/SystemInfo';
 import { MessageCenter } from './components/MessageCenter';
+import { AccessControl } from './components/AccessControl';
+import { AutoDefense } from './components/AutoDefense';
+import { TrafficFiltration } from './components/TrafficFiltration';
+import { DefenseLevel } from './components/DefenseLevel';
 import { NAVIGATION } from './constants';
 import { Construction } from 'lucide-react';
 import { AppProvider, useApp } from './AppContext';
 import { NotificationProvider } from './components/NotificationSystem';
+import { t } from './i18n';
 
 // Placeholder for Under Construction pages
-const ConstructionPage: React.FC<{ title: string }> = ({ title }) => (
-  <div className="h-full flex flex-col items-center justify-center text-ark-subtext">
-    <Construction size={64} className="mb-4 text-ark-primary opacity-50" />
-    <h2 className="text-2xl font-bold text-ark-text mb-2">{title}</h2>
-    <p className="font-mono text-sm">MODULE UNDER MAINTENANCE</p>
-    <p className="font-mono text-xs mt-2 text-ark-subtext">Please contact administrator.</p>
-  </div>
-);
+const ConstructionPage: React.FC<{ title: string }> = ({ title }) => {
+  const { lang } = useApp();
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-ark-subtext">
+      <Construction size={64} className="mb-4 text-ark-primary opacity-50" />
+      <h2 className="text-2xl font-bold text-ark-text mb-2">{title}</h2>
+      <p className="font-mono text-sm">{t('app_maintenance', lang)}</p>
+      <p className="font-mono text-xs mt-2 text-ark-subtext">{t('app_contact_admin', lang)}</p>
+    </div>
+  );
+};
 
 const AppContent: React.FC = () => {
   const { user, login } = useApp();
@@ -56,6 +64,11 @@ const AppContent: React.FC = () => {
           <Route path="/threat-entities/accounts" element={<AccountResources />} />
           <Route path="/threat-entities/samples" element={<SampleDetection />} />
           <Route path="/threat-entities/vuln" element={<VulnSimulation />} />
+          
+          <Route path="/active-defense/level" element={<DefenseLevel />} />
+          <Route path="/active-defense/access" element={<AccessControl />} />
+          <Route path="/active-defense/auto" element={<AutoDefense />} />
+          <Route path="/active-defense/filter" element={<TrafficFiltration />} />
           
           <Route path="/env-management/nodes" element={<NodeManagement />} />
           <Route path="/env-management/templates" element={<TemplateManagement />} />

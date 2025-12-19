@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { AttackLog } from "../types";
 
@@ -29,14 +30,16 @@ export const analyzeAttackLog = async (log: AttackLog): Promise<string> => {
         Severity: ${log.severity}
         `;
 
+        // Fixed: Updated model name to 'gemini-3-flash-preview' for basic text/reasoning tasks
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-flash-preview',
             contents: prompt,
             config: {
                 systemInstruction: "You are PRTS, an automated tactical analysis system. Output should be structured, using bullet points where necessary.",
             }
         });
 
+        // Fixed: Accessing .text property directly instead of text() method
         return response.text || "Analysis complete. No specific insights generated.";
     } catch (error) {
         console.error("Gemini Analysis Error:", error);

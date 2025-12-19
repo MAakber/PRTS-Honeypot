@@ -14,7 +14,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const notify = (type: Notification['type'], title: string, message?: string, duration = 4000) => {
-    const id = Date.now().toString();
+    const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
     setNotifications(prev => [...prev, { id, type, title, message, duration }]);
   };
 
@@ -26,7 +26,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     <NotificationContext.Provider value={{ notify }}>
       {children}
       {createPortal(
-        <div className="fixed top-20 right-6 z-[100] flex flex-col gap-3 pointer-events-none">
+        <div className="fixed top-20 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
           {notifications.map(n => (
             <NotificationItem key={n.id} notification={n} onClose={() => removeNotification(n.id)} />
           ))}

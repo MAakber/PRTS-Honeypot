@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ArkCard, ArkHexagon } from './ArknightsUI';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { MOCK_HACKER_PROFILES, MOCK_HONEYPOT_STATS, DASHBOARD_TREND_DATA } from '../constants';
-import { Globe, User, Server, Camera, Database, LayoutTemplate, Activity, Cpu, HardDrive, Wifi, ArrowUp, ArrowDown, Zap, Monitor, Shield } from 'lucide-react';
+import { Globe, User, Server, Camera, Database, LayoutTemplate, Activity, Cpu, HardDrive, Wifi, ArrowUp, ArrowDown, Zap, Monitor, Shield, ShieldCheck, Filter, ShieldAlert } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
 import { useNavigate } from 'react-router-dom';
@@ -153,6 +153,87 @@ const HoneypotCard: React.FC<{ stat: typeof MOCK_HONEYPOT_STATS[0] }> = ({ stat 
             <span className="text-[10px] text-ark-subtext font-mono uppercase mb-1 tracking-wider">{stat.name}</span>
             <span className="text-xl font-bold text-ark-text font-mono leading-none">{stat.count}</span>
         </div>
+    );
+};
+
+// --- Active Defense Widget ---
+const ActiveDefenseWidget: React.FC = () => {
+    const { lang } = useApp();
+    const navigate = useNavigate();
+
+    return (
+        <ArkCard 
+            title={t('ad_title', lang)} 
+            className="flex-shrink-0 border-ark-primary/30"
+            contentClassName="flex flex-col gap-2 p-3"
+            sub="SYS.DEFENSE.MATRIX"
+        >
+            <div className="flex flex-col gap-2">
+                <button 
+                    onClick={() => navigate('/active-defense/level')}
+                    className="flex items-center justify-between p-2 bg-ark-bg/50 border border-ark-border hover:border-ark-primary/50 hover:bg-ark-active/10 transition-colors group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-sm bg-ark-active/20 text-green-500 group-hover:text-white group-hover:bg-green-500 transition-colors">
+                            <Activity size={14} />
+                        </div>
+                        <span className="text-xs font-bold text-ark-subtext group-hover:text-ark-text uppercase">{t('ad_level_title', lang)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-green-500 font-bold">STANDARD</span>
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    </div>
+                </button>
+
+                <button 
+                    onClick={() => navigate('/active-defense/access')}
+                    className="flex items-center justify-between p-2 bg-ark-bg/50 border border-ark-border hover:border-ark-primary/50 hover:bg-ark-active/10 transition-colors group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-sm bg-ark-active/20 text-ark-primary group-hover:text-white group-hover:bg-ark-primary transition-colors">
+                            <ShieldCheck size={14} />
+                        </div>
+                        <span className="text-xs font-bold text-ark-subtext group-hover:text-ark-text uppercase">{t('ad_access_title', lang)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-ark-primary">128 RULES</span>
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    </div>
+                </button>
+
+                <button 
+                    onClick={() => navigate('/active-defense/auto')}
+                    className="flex items-center justify-between p-2 bg-ark-bg/50 border border-ark-border hover:border-ark-primary/50 hover:bg-ark-active/10 transition-colors group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-sm bg-ark-active/20 text-orange-500 group-hover:text-white group-hover:bg-orange-500 transition-colors">
+                            <Zap size={14} />
+                        </div>
+                        <span className="text-xs font-bold text-ark-subtext group-hover:text-ark-text uppercase">{t('ad_auto_title', lang)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-orange-500">2 ACTIVE</span>
+                        <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse" />
+                    </div>
+                </button>
+
+                <button 
+                    onClick={() => navigate('/active-defense/filter')}
+                    className="flex items-center justify-between p-2 bg-ark-bg/50 border border-ark-border hover:border-ark-primary/50 hover:bg-ark-active/10 transition-colors group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-1.5 rounded-sm bg-ark-active/20 text-blue-400 group-hover:text-white group-hover:bg-blue-400 transition-colors">
+                            <Filter size={14} />
+                        </div>
+                        <span className="text-xs font-bold text-ark-subtext group-hover:text-ark-text uppercase">{t('ad_filter_title', lang)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-blue-400">169 HITS</span>
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    </div>
+                </button>
+            </div>
+        </ArkCard>
     );
 };
 
@@ -426,6 +507,8 @@ export const Dashboard: React.FC = () => {
       <div className="xl:col-span-1 flex flex-col gap-4 min-w-0">
           <SystemMonitor />
           
+          <ActiveDefenseWidget />
+
           <ArkCard 
             title={t('hacker_profile', lang)} 
             className="flex-1 min-h-0" 

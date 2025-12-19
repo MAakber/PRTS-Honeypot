@@ -18,6 +18,10 @@ import { ReportManagement } from './components/ReportManagement';
 import { SystemConfig } from './components/SystemConfig';
 import { SystemInfo } from './components/SystemInfo';
 import { MessageCenter } from './components/MessageCenter';
+import { AccessControl } from './components/AccessControl';
+import { AutoDefense } from './components/AutoDefense';
+import { TrafficFiltration } from './components/TrafficFiltration';
+import { DefenseLevel } from './components/DefenseLevel';
 import { NAVIGATION } from './constants';
 import { Construction } from 'lucide-react';
 import { AppProvider, useApp } from './AppContext';
@@ -60,6 +64,11 @@ const AppContent: React.FC = () => {
           <Route path="/threat-entities/accounts" element={<AccountResources />} />
           <Route path="/threat-entities/samples" element={<SampleDetection />} />
           <Route path="/threat-entities/vuln" element={<VulnSimulation />} />
+          
+          <Route path="/active-defense/level" element={<DefenseLevel />} />
+          <Route path="/active-defense/access" element={<AccessControl />} />
+          <Route path="/active-defense/auto" element={<AutoDefense />} />
+          <Route path="/active-defense/filter" element={<TrafficFiltration />} />
           
           <Route path="/env-management/nodes" element={<NodeManagement />} />
           <Route path="/env-management/templates" element={<TemplateManagement />} />

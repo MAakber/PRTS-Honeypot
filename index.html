@@ -83,11 +83,21 @@
               'slide-out-right': {
                 '0%': { transform: 'translateX(0)', opacity: '1' },
                 '100%': { transform: 'translateX(100%)', opacity: '0' },
+              },
+              'ark-modal-in': {
+                '0%': { opacity: '0', transform: 'scale(0.95)' },
+                '100%': { opacity: '1', transform: 'scale(1)' }
+              },
+              'ark-modal-out': {
+                '0%': { opacity: '1', transform: 'scale(1)' },
+                '100%': { opacity: '0', transform: 'scale(0.95)' }
               }
             },
             animation: {
               'slide-in-right': 'slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
               'slide-out-right': 'slide-out-right 0.3s ease-in forwards',
+              'ark-modal-in': 'ark-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'ark-modal-out': 'ark-modal-out 0.2s ease-in forwards'
             }
           }
         }

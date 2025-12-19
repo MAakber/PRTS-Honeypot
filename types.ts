@@ -132,3 +132,34 @@ export interface Notification {
   message?: string;
   duration?: number;
 }
+
+// Active Defense Interfaces
+export interface AccessControlRule {
+  id: string;
+  ip: string;
+  type: 'blacklist' | 'whitelist';
+  reason: string;
+  addTime: string;
+  expireTime: string | null; // null means permanent
+  source: 'PRTS' | 'SYSTEM'; // PRTS managed vs Native System rule
+  status: 'active' | 'expired';
+}
+
+export interface DefenseStrategy {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  action: string;
+  status: 'active' | 'inactive';
+  hitCount: number;
+}
+
+export interface TrafficRule {
+  id: string;
+  name: string;
+  category: string;
+  pattern: string;
+  status: 'active' | 'inactive';
+  hits: number;
+}

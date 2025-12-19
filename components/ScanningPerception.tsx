@@ -103,7 +103,7 @@ export const ScanningPerception: React.FC = () => {
                          </div>
                          
                          {/* Description Content */}
-                         <div className="text-xs text-ark-text font-mono leading-relaxed opacity-80 w-full pl-1">
+                         <div className="text-xs text-ark-text/80 font-mono leading-relaxed w-full pl-1">
                              <div className="space-y-2 mb-3">
                                  <div className="flex items-start gap-2">
                                     <span className="text-ark-primary mt-0.5 shrink-0">•</span> 

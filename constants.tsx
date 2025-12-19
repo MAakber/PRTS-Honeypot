@@ -5,9 +5,11 @@ import {
   Server, 
   Settings, 
   Zap,
-  LayoutDashboard
+  LayoutDashboard,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
-import { NavItem, AttackLog, NodeStatus, HackerProfile, HoneypotStat, SampleLog, VulnRule, HoneypotTemplate, HoneypotService } from './types';
+import { NavItem, AttackLog, NodeStatus, HackerProfile, HoneypotStat, SampleLog, VulnRule, HoneypotTemplate, HoneypotService, AccessControlRule, DefenseStrategy, TrafficRule } from './types';
 
 export const NAVIGATION: NavItem[] = [
   {
@@ -40,6 +42,19 @@ export const NAVIGATION: NavItem[] = [
       { id: 'accounts', labelEn: 'Account Resources', labelZh: '账号资源', path: '/threat-entities/accounts' },
       { id: 'samples', labelEn: 'Sample Detection', labelZh: '样本检测', path: '/threat-entities/samples' },
       { id: 'vuln-sim', labelEn: 'Vuln Simulation', labelZh: '漏洞仿真', path: '/threat-entities/vuln' },
+    ]
+  },
+  {
+    id: 'active-defense',
+    labelEn: 'Active Defense',
+    labelZh: '主动防御',
+    path: '/active-defense',
+    icon: <ShieldCheck size={18} />,
+    children: [
+      { id: 'defense-level', labelEn: 'Defense Level', labelZh: '防御等级', path: '/active-defense/level' },
+      { id: 'access-control', labelEn: 'Access Control', labelZh: '访问控制', path: '/active-defense/access' },
+      { id: 'auto-defense', labelEn: 'Auto Defense', labelZh: '自律防御', path: '/active-defense/auto' },
+      { id: 'traffic-filter', labelEn: 'Traffic Filtration', labelZh: '流量过滤', path: '/active-defense/filter' },
     ]
   },
   {
@@ -532,4 +547,23 @@ export const MOCK_DECOY_LOGS = [
         deployTime: '2025/11/30 10:00:00', 
         node: 'Internal Node' 
     }
+];
+
+// Active Defense Mocks
+export const MOCK_ACCESS_RULES: AccessControlRule[] = [
+    { id: 'R-001', ip: '192.168.1.105', type: 'blacklist', reason: 'SSH Brute Force', addTime: '2025-12-06 10:00:00', expireTime: '2025-12-07 10:00:00', source: 'PRTS', status: 'active' },
+    { id: 'R-002', ip: '10.0.0.0/8', type: 'whitelist', reason: 'Internal Network', addTime: '2025-01-01 00:00:00', expireTime: null, source: 'SYSTEM', status: 'active' },
+    { id: 'R-003', ip: '45.33.22.11', type: 'blacklist', reason: 'Malicious Payload', addTime: '2025-12-05 14:00:00', expireTime: null, source: 'PRTS', status: 'active' },
+];
+
+export const MOCK_DEFENSE_STRATEGIES: DefenseStrategy[] = [
+    { id: 'S-001', name: 'SSH Anti-Brute Force', description: 'Block IP for 24h if > 5 failures in 1 min', trigger: 'SSH Login Fail > 5', action: 'Block IP (24h)', status: 'active', hitCount: 124 },
+    { id: 'S-002', name: 'Web Scanner Trap', description: 'Block IP permanently if accessing honeypot admin paths', trigger: 'Access /admin_backup', action: 'Block IP (Perm)', status: 'active', hitCount: 45 },
+    { id: 'S-003', name: 'High Frequency Syn Flood', description: 'Rate limit TCP SYN packets', trigger: 'SYN > 1000/s', action: 'Drop Packet', status: 'inactive', hitCount: 0 },
+];
+
+export const MOCK_TRAFFIC_RULES: TrafficRule[] = [
+    { id: 'T-001', name: 'SQL Injection Sig A', category: 'SQL Injection', pattern: 'UNION SELECT', status: 'active', hits: 102 },
+    { id: 'T-002', name: 'XSS Script Tag', category: 'XSS', pattern: '<script>', status: 'active', hits: 55 },
+    { id: 'T-003', name: 'Path Traversal', category: 'Web Attack', pattern: '../..', status: 'active', hits: 12 },
 ];
