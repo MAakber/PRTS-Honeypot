@@ -42,8 +42,13 @@ export interface NodeStatus {
   id: string;
   name: string;
   region: string;
-  status: 'online' | 'offline' | 'warning';
+  status: 'online' | 'offline';
   load: number;
+  memoryUsage?: number;
+  memoryTotal?: number;
+  temperature?: number;
+  netUp?: number;
+  netDown?: number;
   ip: string;
   os: string;
   template: string;

@@ -81,7 +81,6 @@ const getOSIcon = (os: string) => {
 
 const StatusReport: React.FC<{ lang: Lang, nodes: NodeStatus[] }> = ({ lang, nodes }) => {
     const offlineCount = nodes.filter(n => n.status === 'offline').length;
-    const warningCount = nodes.filter(n => n.status === 'warning').length;
 
     return (
         <div className="bg-ark-panel border border-ark-border p-4 mb-4 flex flex-col md:flex-row items-center gap-6 shadow-sm">
@@ -96,18 +95,6 @@ const StatusReport: React.FC<{ lang: Lang, nodes: NodeStatus[] }> = ({ lang, nod
                     {offlineCount > 0 ? (
                         <span className="text-red-500 flex items-center gap-1 font-bold bg-red-500/10 px-2 py-0.5 rounded-sm border border-red-500/30">
                             <AlertCircle size={14} /> {offlineCount} {t('nm_btn_offline', lang)}
-                        </span>
-                    ) : (
-                        <span className="text-green-500 flex items-center gap-1 font-bold bg-green-500/10 px-2 py-0.5 rounded-sm border border-green-500/30">
-                            <ShieldCheck size={14} /> {t('status_normal', lang)}
-                        </span>
-                    )}
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-ark-subtext">{t('nm_report_port', lang)}</span>
-                    {warningCount > 0 ? (
-                        <span className="text-yellow-500 flex items-center gap-1 font-bold bg-yellow-500/10 px-2 py-0.5 rounded-sm border border-yellow-500/30">
-                            <AlertCircle size={14} /> {warningCount} {t('nm_btn_failure', lang)}
                         </span>
                     ) : (
                         <span className="text-green-500 flex items-center gap-1 font-bold bg-green-500/10 px-2 py-0.5 rounded-sm border border-green-500/30">
@@ -357,13 +344,12 @@ export const NodeManagement: React.FC = () => {
                                     {/* Header / Main Info */}
                                     <div className="p-4 flex flex-col md:flex-row items-center gap-4 md:gap-8 border-b border-gray-700/30 bg-ark-bg/50">
                                         <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
-                                            <div className={`w-2 h-12 ${node.status === 'online' ? 'bg-green-500' : node.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                                            <div className={`w-2 h-12 ${node.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
                                             <div className="flex-1">
                                                 <h3 className="text-lg font-bold text-ark-text flex items-center gap-2">
                                                     {node.name}
                                                     <span className={`px-2 py-0.5 text-[10px] uppercase font-bold border rounded-sm ${
                                                         node.status === 'online' ? 'border-green-500/30 text-green-500 bg-green-500/10' : 
-                                                        node.status === 'warning' ? 'border-yellow-500/30 text-yellow-500 bg-yellow-500/10' : 
                                                         'border-red-500/30 text-red-500 bg-red-500/10'
                                                     }`}>
                                                         {node.status}
@@ -400,6 +386,22 @@ export const NodeManagement: React.FC = () => {
                                                 </div>
                                             </div>
                                             <div>
+                                                <span className="block opacity-50 mb-1">{t('nm_label_mem', lang)}</span>
+                                                <div className="w-24 h-2 bg-ark-border rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full ${node.memoryUsage && node.memoryUsage > 80 ? 'bg-red-500' : node.memoryUsage && node.memoryUsage > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} 
+                                                        style={{ width: `${node.memoryUsage || 0}%` }} 
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span className="block opacity-50 mb-1">{t('nm_label_net', lang)}</span>
+                                                <div className="flex flex-col gap-0.5 text-[10px]">
+                                                    <span className="text-orange-500">↑ {node.netUp?.toFixed(2) || '0.00'} MB/s</span>
+                                                    <span className="text-blue-500">↓ {node.netDown?.toFixed(2) || '0.00'} MB/s</span>
+                                                </div>
+                                            </div>
+                                            <div>
                                                 <span className="block opacity-50 mb-1">{t('nm_filter_traffic', lang)}</span>
                                                 <NodeTrafficSparkline data={node.trafficHistory} />
                                             </div>
@@ -432,6 +434,10 @@ export const NodeManagement: React.FC = () => {
                                         <div>
                                             <span className="opacity-50 block mb-1">{t('nm_tbl_mac', lang)}:</span>
                                             <span className="text-ark-text">{node.mac || '00:00:00:00:00:00'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="opacity-50 block mb-1">{t('nm_tbl_temp', lang)}:</span>
+                                            <span className="text-ark-text">{node.temperature?.toFixed(1) || '0.0'}°C</span>
                                         </div>
                                         <div>
                                             <span className="opacity-50 block mb-1">{t('nm_col_template', lang)}:</span>

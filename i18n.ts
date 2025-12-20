@@ -222,6 +222,7 @@ const resources: Record<Lang, Record<string, string>> = {
     net_io: "NET I/O",
     eth_interface: "ETH0 INTERFACE",
     status_online: "ONLINE",
+    status_offline: "OFFLINE",
     uptime: "UPTIME",
     ad_title: "Active Defense",
     tag_capture: "CAPTURE",
@@ -480,10 +481,13 @@ const resources: Record<Lang, Record<string, string>> = {
     nm_label_uptime: "Uptime",
     nm_label_version: "Version",
     nm_label_load: "Load",
+    nm_label_mem: "Memory",
+    nm_label_net: "Network IO",
     nm_filter_traffic: "Traffic",
     nm_tbl_interface: "Interface",
     nm_tbl_ip: "IP Address",
     nm_tbl_mac: "MAC Address",
+    nm_tbl_temp: "Temp",
     nm_col_template: "Template",
     nm_btn_start: "Start",
     nm_btn_stop: "Stop",
@@ -733,8 +737,8 @@ const resources: Record<Lang, Record<string, string>> = {
     // Messages
     msg_node_online_title: "Node Online Notification",
     msg_node_online_content: "Probe node [{name}] ({id}) has successfully connected to the Neural Hub.",
-    msg_node_offline_title: "Node Offline Warning",
-    msg_node_offline_content: "Warning: Probe node [{name}] ({id}) has disconnected from the Neural Hub.",
+    msg_node_offline_title: "Node Offline",
+    msg_node_offline_content: "Probe node [{name}] ({id}) has disconnected from the Neural Hub.",
   },
   zh: {
     // Defense Level
@@ -956,6 +960,7 @@ const resources: Record<Lang, Record<string, string>> = {
     net_io: "网络 I/O",
     eth_interface: "ETH0 接口",
     status_online: "在线",
+    status_offline: "离线",
     uptime: "运行时间",
     ad_title: "主动防御",
     tag_capture: "捕获",
@@ -1214,10 +1219,13 @@ const resources: Record<Lang, Record<string, string>> = {
     nm_label_uptime: "运行时间",
     nm_label_version: "版本",
     nm_label_load: "负载",
+    nm_label_mem: "内存",
+    nm_label_net: "网络 IO",
     nm_filter_traffic: "流量",
     nm_tbl_interface: "接口",
     nm_tbl_ip: "IP 地址",
     nm_tbl_mac: "MAC 地址",
+    nm_tbl_temp: "温度",
     nm_col_template: "模板",
     nm_btn_start: "启动",
     nm_btn_stop: "停止",
@@ -1467,8 +1475,8 @@ const resources: Record<Lang, Record<string, string>> = {
     // 消息通知
     msg_node_online_title: "节点上线通知",
     msg_node_online_content: "探针节点 [{name}] ({id}) 已成功连接至神经枢纽。",
-    msg_node_offline_title: "节点掉线警告",
-    msg_node_offline_content: "警告：探针节点 [{name}] ({id}) 与神经枢纽的连接已断开。",
+    msg_node_offline_title: "节点离线",
+    msg_node_offline_content: "探针节点 [{name}] ({id}) 与神经枢纽的连接已断开。",
   }
 };
 

@@ -50,19 +50,24 @@ type AccountCredential struct {
 }
 
 type NodeStatus struct {
-	ID             string `json:"id" gorm:"primaryKey"`
-	Name           string `json:"name"`
-	Region         string `json:"region"`
-	Status         string `json:"status"` // online, offline, warning
-	Load           int    `json:"load"`
-	IP             string `json:"ip"`
-	OS             string `json:"os"`
-	Template       string `json:"template"`
-	TrafficHistory string `json:"trafficHistory"` // Store as JSON string for simplicity in SQLite
-	Uptime         string `json:"uptime"`
-	Version        string `json:"version"`
-	Interface      string `json:"interface"`
-	MAC            string `json:"mac"`
+	ID             string  `json:"id" gorm:"primaryKey"`
+	Name           string  `json:"name"`
+	Region         string  `json:"region"`
+	Status         string  `json:"status"` // online, offline
+	Load           int     `json:"load"`
+	MemoryUsage    int     `json:"memoryUsage"`
+	MemoryTotal    uint64  `json:"memoryTotal"`
+	Temperature    float64 `json:"temperature"`
+	NetUp          float64 `json:"netUp"`
+	NetDown        float64 `json:"netDown"`
+	IP             string  `json:"ip"`
+	OS             string  `json:"os"`
+	Template       string  `json:"template"`
+	TrafficHistory string  `json:"trafficHistory"` // Store as JSON string for simplicity in SQLite
+	Uptime         string  `json:"uptime"`
+	Version        string  `json:"version"`
+	Interface      string  `json:"interface"`
+	MAC            string  `json:"mac"`
 }
 
 type Message struct {

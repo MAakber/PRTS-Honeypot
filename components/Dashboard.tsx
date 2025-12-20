@@ -301,91 +301,138 @@ const MonitorChart: React.FC<{
 const SystemMonitor: React.FC = () => {
     const { lang, authFetch } = useApp();
     const navigate = useNavigate();
+    const [nodes, setNodes] = useState<any[]>([]);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [history, setHistory] = useState(() => Array(20).fill(0).map((_, i) => ({ 
         time: i, 
-        cpu: 20 + Math.random() * 10, 
-        mem: 40 + Math.random() * 5,
-        up: 1 + Math.random() * 2,
-        down: 5 + Math.random() * 5
+        cpu: 0, 
+        mem: 0,
+        up: 0,
+        down: 0
     })));
 
-    const [current, setCurrent] = useState({ cpu: 0, mem: 0, up: 0, down: 0, temp: 42 });
+    const [current, setCurrent] = useState({ cpu: 0, mem: 0, memTotal: 0, up: 0, down: 0, temp: 42, uptime: '0d 00h 00m', name: '---', status: 'offline' });
 
     useEffect(() => {
         const handleNodeUpdate = (e: any) => {
             const node = e.detail;
-            // If this is our primary probe (or just use the first one for system monitor)
-            setCurrent(prev => ({
-                ...prev,
-                cpu: node.load,
-                mem: prev.mem, // Probe currently doesn't send mem, we can add it later
-                up: Math.random() * 5, // Simulated for now
-                down: Math.random() * 10
-            }));
-
-            setHistory(prev => {
-                const last = prev[prev.length - 1];
-                return [...prev.slice(1), {
-                    time: last.time + 1,
-                    cpu: node.load,
-                    mem: last.mem,
-                    up: Math.random() * 5,
-                    down: Math.random() * 10
-                }];
+            
+            // Update nodes list for the selector
+            setNodes(prev => {
+                const exists = prev.find(n => n.id === node.id);
+                if (!exists) return [...prev, node];
+                return prev.map(n => n.id === node.id ? node : n);
             });
+
+            // If no node is selected, lock onto the first one that reports
+            if (!selectedNodeId) {
+                setSelectedNodeId(node.id);
+            }
+
+            // Only update display if it's the selected node
+            if (selectedNodeId === node.id || (!selectedNodeId && nodes.length === 0)) {
+                setCurrent(prev => ({
+                    ...prev,
+                    cpu: node.load,
+                    mem: node.memoryUsage,
+                    memTotal: node.memoryTotal,
+                    temp: node.temperature || prev.temp,
+                    up: node.netUp,
+                    down: node.netDown,
+                    uptime: node.uptime,
+                    name: node.name,
+                    status: node.status
+                }));
+
+                setHistory(prev => {
+                    const last = prev[prev.length - 1];
+                    return [...prev.slice(1), {
+                        time: last.time + 1,
+                        cpu: node.load,
+                        mem: node.memoryUsage,
+                        up: node.netUp,
+                        down: node.netDown
+                    }];
+                });
+            }
         };
 
         window.addEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
         return () => window.removeEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
-    }, []);
+    }, [selectedNodeId, nodes.length]);
 
     useEffect(() => {
-        const fetchSystemStats = async () => {
+        const fetchInitialNodes = async () => {
             try {
-                const response = await authFetch('/api/v1/stats/system');
+                const response = await authFetch('/api/v1/nodes');
                 if (response.ok) {
                     const data = await response.json();
-                    // Update current and history with real data if available
-                    // For now we still simulate the movement but use real base values
+                    setNodes(data);
+                    if (data.length > 0 && !selectedNodeId) {
+                        // Prefer online nodes for initial selection
+                        const onlineNode = data.find((n: any) => n.status === 'online');
+                        const initialNode = onlineNode || data[0];
+                        setSelectedNodeId(initialNode.id);
+                        setCurrent({
+                            cpu: initialNode.load,
+                            mem: initialNode.memoryUsage,
+                            memTotal: initialNode.memoryTotal,
+                            temp: initialNode.temperature || 42,
+                            up: initialNode.netUp,
+                            down: initialNode.netDown,
+                            uptime: initialNode.uptime,
+                            name: initialNode.name,
+                            status: initialNode.status
+                        });
+                    }
                 }
             } catch (e) {}
         };
-        fetchSystemStats();
-
-        const interval = setInterval(() => {
-            setHistory(prev => {
-                const last = prev[prev.length - 1];
-                const nextCpu = Math.min(100, Math.max(5, last.cpu + (Math.random() - 0.5) * 15));
-                const nextMem = Math.min(100, Math.max(20, last.mem + (Math.random() - 0.5) * 5));
-                const nextUp = Math.max(0, last.up + (Math.random() - 0.5) * 2);
-                const nextDown = Math.max(0, last.down + (Math.random() - 0.5) * 3);
-                
-                setCurrent({ 
-                    cpu: nextCpu, 
-                    mem: nextMem, 
-                    up: nextUp, 
-                    down: nextDown, 
-                    temp: Math.min(90, Math.max(30, current.temp + (Math.random() - 0.5))) 
-                });
-
-                return [...prev.slice(1), { 
-                    time: last.time + 1, 
-                    cpu: nextCpu, 
-                    mem: nextMem, 
-                    up: nextUp, 
-                    down: nextDown
-                }];
-            });
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [current.temp, authFetch]);
+        fetchInitialNodes();
+    }, [authFetch]);
 
     return (
         <ArkCard 
-            title={t('system_monitor', lang)} 
+            title={
+                <div className="flex items-center justify-between w-full pr-2">
+                    <span>{t('system_monitor', lang)}</span>
+                    {nodes.length > 1 && (
+                        <select 
+                            className="bg-ark-bg/80 border border-ark-border text-[10px] font-mono px-1 py-0.5 outline-none text-ark-primary"
+                            value={selectedNodeId || ''}
+                            onChange={(e) => {
+                                const newId = e.target.value;
+                                setSelectedNodeId(newId);
+                                // Update current display immediately with the selected node's data
+                                const selectedNode = nodes.find(n => n.id === newId);
+                                if (selectedNode) {
+                                    setCurrent({
+                                        cpu: selectedNode.load,
+                                        mem: selectedNode.memoryUsage,
+                                        memTotal: selectedNode.memoryTotal,
+                                        temp: selectedNode.temperature || 42,
+                                        up: selectedNode.netUp,
+                                        down: selectedNode.netDown,
+                                        uptime: selectedNode.uptime,
+                                        name: selectedNode.name,
+                                        status: selectedNode.status
+                                    });
+                                }
+                                // Reset history when switching nodes to avoid graph jumps
+                                setHistory(Array(20).fill(0).map((_, i) => ({ time: i, cpu: 0, mem: 0, up: 0, down: 0 })));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {nodes.map(n => (
+                                <option key={n.id} value={n.id}>{n.name}</option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+            }
             className="flex-shrink-0"
             contentClassName="flex flex-col gap-3 pt-2"
-            sub="CORE_V4"
+            sub={current.name.toUpperCase()}
             onClick={() => navigate('/env-management/nodes')}
         >
             <div className="grid grid-cols-2 gap-3">
@@ -401,7 +448,7 @@ const SystemMonitor: React.FC = () => {
                 
                 <MonitorChart 
                     label={t('mem_usage', lang)} 
-                    sub="2048KB"
+                    sub={current.memTotal > 0 ? `${(current.memTotal / 1024).toFixed(1)} GB` : "---"}
                     icon={HardDrive} 
                     value={current.mem.toFixed(0)} 
                     unit="%" 
@@ -418,12 +465,12 @@ const SystemMonitor: React.FC = () => {
                     <div className="flex flex-col items-end">
                         <div className="flex items-baseline gap-1 leading-none mb-1 text-[#f97316]">
                             <ArrowUp size={10} strokeWidth={3} />
-                            <span className="text-lg font-bold">{current.up.toFixed(1)}</span>
+                            <span className="text-lg font-bold">{current.up.toFixed(2)}</span>
                             <span className="text-[9px] opacity-70">MB/s</span>
                         </div>
                         <div className="flex items-baseline gap-1 leading-none text-[#3b82f6]">
                             <ArrowDown size={10} strokeWidth={3} />
-                            <span className="text-lg font-bold">{current.down.toFixed(1)}</span>
+                            <span className="text-lg font-bold">{current.down.toFixed(2)}</span>
                             <span className="text-[9px] opacity-70">MB/s</span>
                         </div>
                     </div>
@@ -438,8 +485,13 @@ const SystemMonitor: React.FC = () => {
             
             {/* Status Footer */}
             <div className="flex justify-between items-center text-[9px] font-mono text-ark-subtext bg-ark-active/10 px-2 py-1 border border-ark-border">
-                <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"/> {t('status_online', lang)}</span>
-                <span>{t('uptime', lang)}: 14D 02H 12M</span>
+                <span className="flex items-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                        current.status === 'online' ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                    }`}/> 
+                    {t(current.status === 'online' ? 'status_online' : 'status_offline', lang)}
+                </span>
+                <span>{t('uptime', lang)}: {current.uptime.toUpperCase()}</span>
             </div>
         </ArkCard>
     );
