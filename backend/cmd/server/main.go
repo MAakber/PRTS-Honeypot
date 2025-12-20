@@ -73,6 +73,9 @@ func main() {
 	// Load persisted time offset
 	h.LoadTimeOffset()
 
+	// Start automatic rule cleanup task
+	h.StartAutoCleanup()
+
 	// Seed Data
 	seedData(db)
 
@@ -125,6 +128,9 @@ func main() {
 			protected.GET("/traffic-rules", h.GetTrafficRules)
 			protected.GET("/defense-strategies", h.GetDefenseStrategies)
 			protected.GET("/access-rules", h.GetAccessControlRules)
+			protected.POST("/access-rules", h.CreateAccessControlRule)
+			protected.DELETE("/access-rules/:id", h.DeleteAccessControlRule)
+			protected.POST("/access-rules/sync", h.SyncAccessRules)
 			protected.GET("/login-logs", h.GetLoginLogs)
 			protected.GET("/reports", h.GetReports)
 
@@ -383,6 +389,9 @@ func seedData(db *gorm.DB) {
 	}
 
 	// Seed Access Control Rules
+	// Clean up old default whitelist rule if it exists
+	db.Where("id = ? AND source = ?", "AC-002", "SYSTEM").Delete(&model.AccessControlRule{})
+
 	db.Model(&model.AccessControlRule{}).Count(&count)
 	if count == 0 {
 		rules := []model.AccessControlRule{
@@ -394,16 +403,6 @@ func seedData(db *gorm.DB) {
 				Source:     "PRTS",
 				ExpireTime: "2025-12-07 10:00:00",
 				AddTime:    "2025-12-06 10:00:00",
-				Status:     "active",
-			},
-			{
-				ID:         "AC-002",
-				IP:         "10.0.0.0/24",
-				Type:       "whitelist",
-				Reason:     "Internal management network",
-				Source:     "SYSTEM",
-				ExpireTime: "",
-				AddTime:    "2025-12-01 08:00:00",
 				Status:     "active",
 			},
 			{

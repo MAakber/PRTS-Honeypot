@@ -188,6 +188,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.log("Received NODE_UPDATE:", message.data);
             // Dispatch a custom event so NodeManagement can listen to it
             window.dispatchEvent(new CustomEvent('PRTS_NODE_UPDATE', { detail: message.data }));
+          } else if (message.type === 'NODE_SYNC_COMPLETE') {
+            console.log("Received NODE_SYNC_COMPLETE:", message.data);
+            window.dispatchEvent(new CustomEvent('PRTS_NODE_SYNC_COMPLETE', { detail: message.data }));
+            // Also dispatch NODE_UPDATE so other components update their data
+            window.dispatchEvent(new CustomEvent('PRTS_NODE_UPDATE', { detail: message.data }));
           } else if (message.type === 'NEW_MESSAGE') {
             const msg = message.data;
             

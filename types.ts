@@ -57,6 +57,7 @@ export interface NodeStatus {
   version?: string;
   interface?: string;
   mac?: string;
+  firewallStatus?: 'active' | 'inactive' | 'error';
 }
 
 export interface HackerProfile {

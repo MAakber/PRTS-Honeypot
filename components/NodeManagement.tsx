@@ -440,6 +440,15 @@ export const NodeManagement: React.FC = () => {
                                             <span className="text-ark-text">{node.temperature?.toFixed(1) || '0.0'}°C</span>
                                         </div>
                                         <div>
+                                            <span className="opacity-50 block mb-1">{t('nm_tbl_firewall', lang)}:</span>
+                                            <span className={`font-bold ${
+                                                node.firewallStatus === 'active' ? 'text-green-500' : 
+                                                node.firewallStatus === 'error' ? 'text-red-500' : 'text-ark-subtext'
+                                            }`}>
+                                                {node.firewallStatus ? t(`fw_${node.firewallStatus}`, lang) : t('fw_inactive', lang)}
+                                            </span>
+                                        </div>
+                                        <div>
                                             <span className="opacity-50 block mb-1">{t('nm_col_template', lang)}:</span>
                                             <span className="text-ark-primary underline cursor-pointer">{node.template}</span>
                                         </div>

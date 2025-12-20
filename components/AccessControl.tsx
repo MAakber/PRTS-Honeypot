@@ -26,10 +26,96 @@ export const AccessControl: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'blacklist' | 'whitelist'>('blacklist');
     const [isSyncing, setIsSyncing] = useState(false);
+    const isSyncingRef = React.useRef(false);
     const [nodeStates, setNodeStates] = useState<Record<string, boolean>>({});
+    const lastNotifiedStatus = React.useRef<Record<string, string>>({});
+    const lastNotifiedError = React.useRef<Record<string, string>>({});
+    const lastNotifiedInfo = React.useRef<Record<string, string>>({});
 
     useEffect(() => {
         fetchData();
+
+        const handleSyncComplete = (e: any) => {
+            const updatedNode = e.detail;
+            
+            const wasSyncing = isSyncingRef.current;
+
+            // Force sync state off immediately
+            setIsSyncing(false);
+            isSyncingRef.current = false;
+
+            // Show notification if we were syncing OR if there's an error
+            // This ensures errors from toggle switches (which don't set isSyncing) are still shown
+            if (wasSyncing || updatedNode.firewallStatus === 'error') {
+                if (updatedNode.firewallStatus === 'error') {
+                    const errorMsg = updatedNode.firewallError || t('fw_error', lang);
+                    notify('error', t('op_failed', lang), `${updatedNode.name}: ${errorMsg}`);
+                } else if (wasSyncing) {
+                    // Only show success if we were explicitly syncing
+                    // Toggle switches have their own optimistic success notification
+                    const successMsg = updatedNode.firewallInfo || t('op_fw_sync_success', lang);
+                    notify('success', t('op_success', lang), successMsg);
+                }
+            }
+            
+            // Update refs to prevent duplicate notifications from the subsequent NODE_UPDATE
+            lastNotifiedStatus.current[updatedNode.id] = updatedNode.firewallStatus;
+            lastNotifiedError.current[updatedNode.id] = updatedNode.firewallError || '';
+            lastNotifiedInfo.current[updatedNode.id] = updatedNode.firewallInfo || '';
+        };
+
+        const handleNodeUpdate = (e: any) => {
+            const updatedNode = e.detail;
+            setNodes(prev => {
+                const index = prev.findIndex(n => n.id === updatedNode.id);
+                if (index === -1) return [updatedNode, ...prev];
+                const newNodes = [...prev];
+                newNodes[index] = { ...newNodes[index], ...updatedNode };
+                return newNodes;
+            });
+            
+            // Update switch state if firewall status changed
+            if (updatedNode.firewallStatus) {
+                setNodeStates(prev => ({
+                    ...prev,
+                    [updatedNode.id]: updatedNode.firewallStatus === 'active'
+                }));
+
+                const wasSyncing = isSyncingRef.current;
+                const hasStatusChanged = lastNotifiedStatus.current[updatedNode.id] !== updatedNode.firewallStatus;
+                const hasErrorChanged = updatedNode.firewallError && lastNotifiedError.current[updatedNode.id] !== updatedNode.firewallError;
+                const hasInfoChanged = updatedNode.firewallInfo && lastNotifiedInfo.current[updatedNode.id] !== updatedNode.firewallInfo;
+
+                // Determine if this update is likely the result of our sync
+                // We assume a sync result will have either an error or a non-empty firewallInfo
+                const isLikelySyncResult = updatedNode.firewallStatus === 'error' || !!updatedNode.firewallInfo;
+
+                if (wasSyncing && isLikelySyncResult) {
+                    setIsSyncing(false);
+                    isSyncingRef.current = false;
+                }
+
+                // Notification Logic
+                if (updatedNode.firewallStatus === 'error' && (hasStatusChanged || hasErrorChanged || (wasSyncing && isLikelySyncResult))) {
+                    const errorMsg = updatedNode.firewallError || t('fw_error', lang);
+                    notify('error', t('op_failed', lang), `${updatedNode.name}: ${errorMsg}`);
+                } else if (hasInfoChanged && updatedNode.firewallStatus === 'active' && updatedNode.firewallInfo && !wasSyncing) {
+                    // Background update (not triggered by manual sync)
+                    notify('success', t('op_success', lang), updatedNode.firewallInfo);
+                }
+                
+                lastNotifiedStatus.current[updatedNode.id] = updatedNode.firewallStatus;
+                lastNotifiedError.current[updatedNode.id] = updatedNode.firewallError || '';
+                lastNotifiedInfo.current[updatedNode.id] = updatedNode.firewallInfo || '';
+            }
+        };
+
+        window.addEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
+        window.addEventListener('PRTS_NODE_SYNC_COMPLETE', handleSyncComplete);
+        return () => {
+            window.removeEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
+            window.removeEventListener('PRTS_NODE_SYNC_COMPLETE', handleSyncComplete);
+        };
     }, []);
 
     const fetchData = async () => {
@@ -43,7 +129,7 @@ export const AccessControl: React.FC = () => {
             if (nodesData) {
                 setNodes(nodesData);
                 setNodeStates(
-                    nodesData.reduce((acc: any, node: any) => ({ ...acc, [node.id]: node.status === 'online' }), {})
+                    nodesData.reduce((acc: any, node: any) => ({ ...acc, [node.id]: node.firewallStatus === 'active' }), {})
                 );
             }
         } catch (error) {
@@ -66,23 +152,82 @@ export const AccessControl: React.FC = () => {
     
     const filteredRules = rules.filter(r => r.type === activeTab);
 
-    const handleSync = () => {
+    const handleSync = async () => {
         setIsSyncing(true);
-        setTimeout(() => {
+        isSyncingRef.current = true;
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch('/api/v1/access-rules/sync', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (response.ok) {
+                // We don't notify success here because the probe will report back via WebSocket
+                // and the PRTS_NODE_UPDATE listener will handle the notification.
+                // This avoids "Success" showing up before the probe actually finishes.
+            } else {
+                notify('error', t('op_failed', lang), 'Sync command failed to issue');
+                setIsSyncing(false);
+                isSyncingRef.current = false;
+            }
+        } catch (error) {
+            console.error('Failed to sync rules:', error);
+            notify('error', t('op_failed', lang), 'Network error');
             setIsSyncing(false);
-            notify('success', t('op_success', lang), t('op_fw_sync_success', lang));
-        }, 1500);
+            isSyncingRef.current = false;
+        }
     };
 
-    const handleDelete = (id: string) => {
-        setRules(prev => prev.filter(r => r.id !== id));
-        notify('error', t('op_success', lang), t('op_item_deleted', lang));
+    const handleDelete = async (id: string) => {
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch(`/api/v1/access-rules/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                setRules(prev => prev.filter(r => r.id !== id));
+                notify('error', t('op_success', lang), t('op_item_deleted', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to delete rule');
+            }
+        } catch (error) {
+            console.error('Failed to delete rule:', error);
+            notify('error', t('op_failed', lang), 'Network error');
+        }
     };
 
-    const toggleNodeFirewall = (id: string, name: string) => {
+    const toggleNodeFirewall = async (id: string, name: string) => {
         const newState = !nodeStates[id];
-        setNodeStates(prev => ({ ...prev, [id]: newState }));
-        notify(newState ? 'success' : 'warning', t('op_success', lang), `${name}: ${newState ? t('ac_fw_active', lang) : t('ac_fw_disabled', lang)}`);
+        const command = newState ? 'ENABLE_FIREWALL' : 'DISABLE_FIREWALL';
+        
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch('/api/v1/nodes/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ nodeId: id, command })
+            });
+
+            if (response.ok) {
+                setNodeStates(prev => ({ ...prev, [id]: newState }));
+                notify(newState ? 'success' : 'warning', t('op_success', lang), `${name}: ${newState ? t('ac_fw_active', lang) : t('ac_fw_disabled', lang)}`);
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to send command');
+            }
+        } catch (error) {
+            console.error('Failed to toggle firewall:', error);
+            notify('error', t('op_failed', lang), 'Network error');
+        }
     };
 
     // Modal Handlers
@@ -114,7 +259,7 @@ export const AccessControl: React.FC = () => {
         return regex.test(cidr);
     };
 
-    const handleSaveRule = () => {
+    const handleSaveRule = async () => {
         if (!formIp) {
             notify('warning', t('op_failed', lang), lang === 'zh' ? "请输入目标地址" : "Target address is required");
             return;
@@ -139,8 +284,8 @@ export const AccessControl: React.FC = () => {
             else if (formDuration === '7d') now.setDate(now.getDate() + 7);
             
             // Format: YYYY-MM-DD HH:mm:ss
-            expireTime = now.getFullYear() + '-' + 
-                         String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+            expireTime = now.getFullYear() + '/' + 
+                         String(now.getMonth() + 1).padStart(2, '0') + '/' + 
                          String(now.getDate()).padStart(2, '0') + ' ' + 
                          String(now.getHours()).padStart(2, '0') + ':' + 
                          String(now.getMinutes()).padStart(2, '0') + ':' + 
@@ -149,20 +294,38 @@ export const AccessControl: React.FC = () => {
 
         const defaultReason = formType === 'blacklist' ? t('ac_default_blacklist', lang) : t('ac_default_whitelist', lang);
 
-        const newRule: AccessControlRule = {
-            id: `R-${Date.now()}`,
+        const newRule: Partial<AccessControlRule> = {
             ip: formIp,
             type: formType,
             reason: formReason || defaultReason,
-            addTime: new Date().toLocaleString(),
-            expireTime: expireTime,
+            expireTime: expireTime || t('ac_permanent', lang),
             source: 'PRTS',
             status: 'active'
         };
 
-        setRules(prev => [newRule, ...prev]);
-        notify('success', t('op_success', lang), t('ac_add_rule', lang));
-        closeAddModal();
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch('/api/v1/access-rules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(newRule)
+            });
+
+            if (response.ok) {
+                const savedRule = await response.json();
+                setRules(prev => [savedRule, ...prev]);
+                notify('success', t('op_success', lang), t('ac_add_rule', lang));
+                closeAddModal();
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to save rule');
+            }
+        } catch (error) {
+            console.error('Failed to save rule:', error);
+            notify('error', t('op_failed', lang), 'Network error');
+        }
     };
 
     const getOSIcon = (os: string) => {
@@ -252,8 +415,11 @@ export const AccessControl: React.FC = () => {
                                     <div className="text-xs font-mono text-ark-subtext truncate">{node.ip}</div>
                                     <div className="mt-auto pt-2 border-t border-black/10 dark:border-white/10 flex justify-between items-center">
                                         <span className="text-[10px] font-mono text-ark-subtext uppercase">{getFirewallName(node.os)}</span>
-                                        <span className={"text-[10px] font-bold " + (nodeStates[node.id] ? 'text-green-500' : 'text-red-500')}>
-                                            {nodeStates[node.id] ? t('ac_status_active', lang) : t('ac_status_error', lang)}
+                                        <span className={`text-[10px] font-bold ${
+                                            node.firewallStatus === 'active' ? 'text-green-500' : 
+                                            node.firewallStatus === 'error' ? 'text-red-500' : 'text-ark-subtext'
+                                        }`}>
+                                            {node.firewallStatus ? t(`fw_${node.firewallStatus}`, lang) : t('fw_inactive', lang)}
                                         </span>
                                     </div>
                                 </div>

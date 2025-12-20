@@ -67,6 +67,43 @@ func (h *Handler) getLoginPolicy() model.LoginPolicy {
 	return policy
 }
 
+func (h *Handler) StartAutoCleanup() {
+	ticker := time.NewTicker(1 * time.Minute)
+	go func() {
+		for range ticker.C {
+			var expiredRules []model.AccessControlRule
+			now := h.Now()
+
+			// Find rules that just expired
+			h.DB.Where("status = ? AND expire_time != ? AND expire_time != ? AND expire_time != ?",
+				"active", "", "永久", "Permanent").Find(&expiredRules)
+
+			hasChanges := false
+			for _, rule := range expiredRules {
+				// Use ParseInLocation with time.Local to match the base of h.Now()
+				expireTime, err := time.ParseInLocation("2006/01/02 15:04:05", rule.ExpireTime, time.Local)
+				if err == nil && expireTime.Before(now) {
+					h.DB.Model(&rule).Update("status", "expired")
+					hasChanges = true
+					log.Printf("Rule %s (%s) has expired automatically at %s (NTP Time: %s)",
+						rule.ID, rule.IP, rule.ExpireTime, now.Format("2006/01/02 15:04:05"))
+				}
+			}
+
+			// If any rule expired, broadcast sync to all nodes
+			if hasChanges {
+				var activeRules []model.AccessControlRule
+				h.DB.Where("status = ?", "active").Find(&activeRules)
+				msg, _ := json.Marshal(map[string]interface{}{
+					"type": "SYNC_RULES",
+					"data": activeRules,
+				})
+				h.Hub.Broadcast(msg)
+			}
+		}
+	}()
+}
+
 func (h *Handler) GetPublicLoginPolicy(c *gin.Context) {
 	policy := h.getLoginPolicy()
 	// Don't return whitelist to public
@@ -441,6 +478,61 @@ func (h *Handler) GetAccessControlRules(c *gin.Context) {
 	c.JSON(http.StatusOK, rules)
 }
 
+func (h *Handler) CreateAccessControlRule(c *gin.Context) {
+	var rule model.AccessControlRule
+	if err := c.ShouldBindJSON(&rule); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if rule.ID == "" {
+		rule.ID = fmt.Sprintf("AC-%d", time.Now().Unix())
+	}
+	if rule.AddTime == "" {
+		rule.AddTime = time.Now().Format("2006/01/02 15:04:05")
+	}
+	if rule.Status == "" {
+		rule.Status = "active"
+	}
+	h.DB.Create(&rule)
+	c.JSON(http.StatusOK, rule)
+}
+
+func (h *Handler) DeleteAccessControlRule(c *gin.Context) {
+	id := c.Param("id")
+	h.DB.Delete(&model.AccessControlRule{}, "id = ?", id)
+	c.JSON(http.StatusOK, gin.H{"message": "Rule deleted"})
+}
+
+func (h *Handler) SyncAccessRules(c *gin.Context) {
+	// Fetch all active rules
+	var allRules []model.AccessControlRule
+	h.DB.Where("status = ?", "active").Find(&allRules)
+
+	// Filter expired rules
+	var rules []model.AccessControlRule
+	now := h.Now()
+	for _, rule := range allRules {
+		if rule.ExpireTime != "" && rule.ExpireTime != "永久" && rule.ExpireTime != "Permanent" {
+			// Use ParseInLocation with time.Local to match the base of h.Now()
+			expireTime, err := time.ParseInLocation("2006/01/02 15:04:05", rule.ExpireTime, time.Local)
+			if err == nil && expireTime.Before(now) {
+				// Rule has expired, update its status in DB
+				h.DB.Model(&rule).Update("status", "expired")
+				continue
+			}
+		}
+		rules = append(rules, rule)
+	}
+
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type": "SYNC_RULES",
+		"data": rules,
+	})
+
+	h.Hub.Broadcast(msg)
+	c.JSON(http.StatusOK, gin.H{"message": "Sync command broadcasted", "count": len(rules)})
+}
+
 func (h *Handler) GetLoginLogs(c *gin.Context) {
 	var logs []model.LoginLog
 	h.DB.Order("time desc").Find(&logs)
@@ -604,7 +696,8 @@ func (h *Handler) UpdatePassword(c *gin.Context) {
 
 func (h *Handler) NtpSync(c *gin.Context) {
 	var cfg model.SystemConfig
-	h.DB.Where("key = ?", "ntp_config").First(&cfg)
+	// Use Find instead of First to avoid "record not found" error log when config doesn't exist
+	h.DB.Where("key = ?", "ntp_config").Find(&cfg)
 
 	var ntpCfg struct {
 		Server string `json:"server"`
@@ -673,7 +766,7 @@ func (h *Handler) HandleWebSocketMessage(msg []byte, client *websocket.Client) {
 		return
 	}
 
-	if message.Type == "NODE_REPORT" {
+	if message.Type == "NODE_REPORT" || message.Type == "SYNC_COMPLETE" {
 		var nodeStatus model.NodeStatus
 		if err := json.Unmarshal(message.Data, &nodeStatus); err != nil {
 			return
@@ -711,6 +804,9 @@ func (h *Handler) HandleWebSocketMessage(msg []byte, client *websocket.Client) {
 				"version":         nodeStatus.Version,
 				"interface":       nodeStatus.Interface,
 				"mac":             nodeStatus.MAC,
+				"firewall_status": nodeStatus.FirewallStatus,
+				"firewall_error":  nodeStatus.FirewallError,
+				"firewall_info":   nodeStatus.FirewallInfo,
 			}
 			h.DB.Model(&existing).Updates(updates)
 			// Refresh existing object from DB to get the latest state
@@ -718,11 +814,17 @@ func (h *Handler) HandleWebSocketMessage(msg []byte, client *websocket.Client) {
 		}
 
 		// Broadcast to frontend
+		// If it's a SYNC_COMPLETE message from probe, broadcast it as NODE_SYNC_COMPLETE to frontend
+		broadcastType := "NODE_UPDATE"
+		if message.Type == "SYNC_COMPLETE" {
+			broadcastType = "NODE_SYNC_COMPLETE"
+		}
+
 		broadcastMsg, _ := json.Marshal(map[string]interface{}{
-			"type": "NODE_UPDATE",
+			"type": broadcastType,
 			"data": nodeStatus,
 		})
-		log.Printf("Broadcasting NODE_UPDATE for %s (Status: %s)", nodeStatus.ID, nodeStatus.Status)
+		log.Printf("Broadcasting %s for %s (Status: %s)", broadcastType, nodeStatus.ID, nodeStatus.Status)
 		h.Hub.Broadcast(broadcastMsg)
 
 		// Create system message for online status if it was offline or new
@@ -804,8 +906,42 @@ func (h *Handler) HandleNodeCommand(c *gin.Context) {
 	})
 
 	if h.Hub.SendToNode(req.NodeID, msg) {
+		// If command is ENABLE_FIREWALL, automatically trigger a sync for this node
+		// to restore the rules immediately.
+		if req.Command == "ENABLE_FIREWALL" {
+			go func() {
+				// Small delay to ensure probe has processed the ENABLE command
+				time.Sleep(500 * time.Millisecond)
+				h.syncRulesToNode(req.NodeID)
+			}()
+		}
 		c.JSON(http.StatusOK, gin.H{"status": "command sent"})
 	} else {
 		c.JSON(http.StatusNotFound, gin.H{"error": "node not connected"})
 	}
+}
+
+func (h *Handler) syncRulesToNode(nodeID string) {
+	var allRules []model.AccessControlRule
+	h.DB.Where("status = ?", "active").Find(&allRules)
+
+	var rules []model.AccessControlRule
+	now := h.Now()
+	for _, rule := range allRules {
+		if rule.ExpireTime != "" && rule.ExpireTime != "永久" && rule.ExpireTime != "Permanent" {
+			expireTime, err := time.Parse("2006/01/02 15:04:05", rule.ExpireTime)
+			if err == nil && expireTime.Before(now) {
+				h.DB.Model(&rule).Update("status", "expired")
+				continue
+			}
+		}
+		rules = append(rules, rule)
+	}
+
+	msg, _ := json.Marshal(map[string]interface{}{
+		"type": "SYNC_RULES",
+		"data": rules,
+	})
+
+	h.Hub.SendToNode(nodeID, msg)
 }

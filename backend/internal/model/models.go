@@ -68,6 +68,9 @@ type NodeStatus struct {
 	Version        string  `json:"version"`
 	Interface      string  `json:"interface"`
 	MAC            string  `json:"mac"`
+	FirewallStatus string  `json:"firewallStatus"` // active, inactive, error
+	FirewallError  string  `json:"firewallError"`
+	FirewallInfo   string  `json:"firewallInfo"`
 }
 
 type Message struct {
