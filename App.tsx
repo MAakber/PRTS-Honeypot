@@ -42,9 +42,36 @@ const ConstructionPage: React.FC<{ title: string }> = ({ title }) => {
 };
 
 const AppContent: React.FC = () => {
-  const { user, login } = useApp();
+  const { user, login, loginPolicy } = useApp();
+
+  // Clean up the secret URL from address bar after login
+  React.useEffect(() => {
+    if (user && window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [user]);
 
   if (!user) {
+    // Wait for policy to load to avoid flashing the login page on wrong URLs
+    if (!loginPolicy) {
+      return <div className="h-screen w-screen bg-[#121212]" />;
+    }
+
+    const currentPath = window.location.pathname;
+    const targetPath = `/admin/${loginPolicy.url || 'login'}`;
+    
+    // If we're not on the target path, show 404
+    // This "hides" the login page from unauthorized discovery
+    if (currentPath !== targetPath) {
+      return (
+        <div className="h-screen w-screen bg-[#121212] flex flex-col items-center justify-center font-mono text-ark-subtext p-4">
+          <div className="text-4xl font-bold text-ark-primary mb-4">404</div>
+          <div className="text-sm uppercase tracking-[0.2em]">Access Denied / Resource Not Found</div>
+          <div className="mt-8 text-[10px] opacity-30">PRTS_SYSTEM_ERROR_CODE: 0x00000404</div>
+        </div>
+      );
+    }
+    
     return <Login onLogin={login} />;
   }
 

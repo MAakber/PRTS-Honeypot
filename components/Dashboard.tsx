@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArkCard, ArkHexagon } from './ArknightsUI';
+import { ArkCard, ArkHexagon, ArkLoading } from './ArknightsUI';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { MOCK_HACKER_PROFILES, MOCK_HONEYPOT_STATS, DASHBOARD_TREND_DATA } from '../constants';
+import { DASHBOARD_TREND_DATA } from '../constants';
 import { Globe, User, Server, Camera, Database, LayoutTemplate, Activity, Cpu, HardDrive, Wifi, ArrowUp, ArrowDown, Zap, Monitor, Shield, ShieldCheck, Filter, ShieldAlert } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
@@ -30,14 +30,14 @@ const StatBlock: React.FC<{ label: string, value: number, total: number, color: 
                 <div className="text-[10px] uppercase tracking-widest text-ark-subtext font-bold truncate group-hover:text-ark-text transition-colors">{label}</div>
                 {/* Progress Line */}
                 <div className="h-[2px] w-full bg-ark-border mt-2 relative overflow-hidden">
-                     <div className="absolute inset-y-0 left-0 transition-all duration-1000 group-hover:opacity-100" style={{ width: `${(value/total)*100}%`, backgroundColor: color }} />
+                     <div className="absolute inset-y-0 left-0 transition-all duration-1000 group-hover:opacity-100" style={{ width: `${total > 0 ? (value/total)*100 : 0}%`, backgroundColor: color }} />
                 </div>
             </div>
         </div>
     );
 };
 
-const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
+const AttackChain: React.FC<{ lang: string, stats: any }> = ({ lang, stats }) => {
     const navigate = useNavigate();
     const { modules } = useApp();
 
@@ -50,7 +50,7 @@ const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
              <div className="flex-shrink-0">
                  <ArkHexagon 
                     label={t('chain_attack_ip', lang as any)} 
-                    value="846" 
+                    value={stats?.totalSources?.toString() || "0"} 
                     size="lg" 
                     icon={<Globe size={24} />} 
                     color={getColor(modules.attackSource, 'var(--ark-primary)')}
@@ -65,7 +65,7 @@ const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
              <div className="flex gap-3 flex-wrap justify-center">
                  <ArkHexagon 
                     label={t('chain_scanning', lang as any)} 
-                    value="3094" 
+                    value={stats?.totalScans?.toString() || "0"} 
                     size="md" 
                     color={getColor(modules.scanning, '#eab308')}
                     onClick={() => navigate('/threat-perception/scanning')}
@@ -73,7 +73,7 @@ const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
                  />
                  <ArkHexagon 
                     label={t('chain_attack', lang as any)} 
-                    value="0" 
+                    value={stats?.totalAttacks?.toString() || "0"} 
                     size="md" 
                     color={getColor(modules.attack, '#f97316')}
                     onClick={() => navigate('/threat-perception/list')}
@@ -81,7 +81,7 @@ const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
                  />
                  <ArkHexagon 
                     label={t('chain_info_stealing', lang as any)} 
-                    value="0" 
+                    value={stats?.totalCredentials?.toString() || "0"} 
                     size="md" 
                     color={getColor(modules.infoStealing, '#ef4444')}
                     onClick={() => navigate('/threat-entities/accounts')}
@@ -92,7 +92,7 @@ const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
                     value="0" 
                     size="md" 
                     color={getColor(modules.payload, '#a855f7')}
-                    onClick={() => navigate('/threat-entities/samples')}
+                    onClick={() => navigate('/threat-perception/samples')}
                     className={!modules.payload ? 'opacity-70 grayscale' : ''}
                  />
                  <ArkHexagon 
@@ -108,47 +108,53 @@ const AttackChain: React.FC<{ lang: string }> = ({ lang }) => {
     );
 };
 
-const HackerProfileCard: React.FC<{ profile: typeof MOCK_HACKER_PROFILES[0], lang: string }> = ({ profile, lang }) => (
-    <div className="flex items-center gap-3 p-3 border-b border-ark-border hover:bg-ark-active/20 transition-colors last:border-0 group cursor-pointer text-xs">
-        <div className="w-8 h-8 bg-ark-subtext/10 rounded-sm flex items-center justify-center flex-shrink-0 border border-ark-border group-hover:border-ark-primary transition-colors">
-            <User size={14} className="text-ark-subtext group-hover:text-ark-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-1">
-                <span className="font-mono font-bold text-ark-text group-hover:text-ark-primary transition-colors">{profile.ip}</span>
-                <span className="text-[9px] text-ark-subtext font-mono bg-ark-bg px-1 rounded-sm border border-ark-border">{profile.lastSeen}</span>
+const HackerProfileCard: React.FC<{ profile: any, lang: string }> = ({ profile, lang }) => {
+    const tags = typeof profile.tags === 'string' ? profile.tags.split(',') : (profile.tags || []);
+    return (
+        <div className="flex items-center gap-3 p-3 border-b border-ark-border hover:bg-ark-active/20 transition-colors last:border-0 group cursor-pointer text-xs">
+            <div className="w-8 h-8 bg-ark-subtext/10 rounded-sm flex items-center justify-center flex-shrink-0 border border-ark-border group-hover:border-ark-primary transition-colors">
+                <User size={14} className="text-ark-subtext group-hover:text-ark-primary" />
             </div>
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 text-[10px] text-ark-subtext truncate">
-                     <Globe size={10} />
-                     <span>{profile.location}</span>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono font-bold text-ark-text group-hover:text-ark-primary transition-colors">{profile.ip}</span>
+                    <span className="text-[9px] text-ark-subtext font-mono bg-ark-bg px-1 rounded-sm border border-ark-border">{profile.lastSeen || profile.firstTime}</span>
                 </div>
-                <div className="flex gap-1">
-                    {profile.tags.slice(0,1).map(tag => (
-                         <span key={tag} className="text-[9px] text-ark-danger uppercase font-bold tracking-tight">
-                             {tag === 'multi_capture' ? t('tag_capture', lang as any) : tag}
-                         </span>
-                    ))}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1 text-[10px] text-ark-subtext truncate">
+                         <Globe size={10} />
+                         <span>{profile.location || profile.country}</span>
+                    </div>
+                    <div className="flex gap-1">
+                        {tags.slice(0,1).map((tag: string) => (
+                             <span key={tag} className="text-[9px] text-ark-danger uppercase font-bold tracking-tight">
+                                 {tag === 'multi_capture' ? t('tag_capture', lang as any) : (tag === 'scan' ? t('btn_scan', lang as any) : tag)}
+                             </span>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
-const HoneypotCard: React.FC<{ stat: typeof MOCK_HONEYPOT_STATS[0] }> = ({ stat }) => {
+const HoneypotCard: React.FC<{ stat: any }> = ({ stat }) => {
     const icons = {
         tcp: <Activity size={20} />,
         redis: <Database size={20} />,
         esxi: <Server size={20} />,
         coremail: <LayoutTemplate size={20} />,
         elastic: <Activity size={20} />,
-        camera: <Camera size={20} />
+        camera: <Camera size={20} />,
+        ssh: <Server size={20} />,
+        http: <Globe size={20} />,
+        mysql: <Database size={20} />
     };
 
     return (
         <div className="bg-ark-bg/50 border border-ark-border p-3 flex flex-col items-center justify-center text-center hover:bg-ark-active/10 hover:border-ark-primary transition-all cursor-pointer group rounded-sm">
             <div className="text-ark-subtext group-hover:text-ark-primary transition-colors mb-2 group-hover:scale-110 duration-300">
-                {icons[stat.type as keyof typeof icons]}
+                {icons[stat.type?.toLowerCase() as keyof typeof icons] || <Shield size={20} />}
             </div>
             <span className="text-[10px] text-ark-subtext font-mono uppercase mb-1 tracking-wider">{stat.name}</span>
             <span className="text-xl font-bold text-ark-text font-mono leading-none">{stat.count}</span>
@@ -157,7 +163,7 @@ const HoneypotCard: React.FC<{ stat: typeof MOCK_HONEYPOT_STATS[0] }> = ({ stat 
 };
 
 // --- Active Defense Widget ---
-const ActiveDefenseWidget: React.FC = () => {
+const ActiveDefenseWidget: React.FC<{ stats: any }> = ({ stats }) => {
     const { lang } = useApp();
     const navigate = useNavigate();
 
@@ -196,7 +202,7 @@ const ActiveDefenseWidget: React.FC = () => {
                         <span className="text-xs font-bold text-ark-subtext group-hover:text-ark-text uppercase">{t('ad_access_title', lang)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-ark-primary">128 RULES</span>
+                        <span className="text-[10px] font-mono text-ark-primary">{stats?.totalAccessRules || 0} RULES</span>
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                     </div>
                 </button>
@@ -212,7 +218,7 @@ const ActiveDefenseWidget: React.FC = () => {
                         <span className="text-xs font-bold text-ark-subtext group-hover:text-ark-text uppercase">{t('ad_auto_title', lang)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-orange-500">2 ACTIVE</span>
+                        <span className="text-[10px] font-mono text-orange-500">{stats?.activeDefenseStrategies || 0} ACTIVE</span>
                         <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse" />
                     </div>
                 </button>
@@ -228,7 +234,7 @@ const ActiveDefenseWidget: React.FC = () => {
                         <span className="text-xs font-bold text-ark-subtext group-hover:text-ark-text uppercase">{t('ad_filter_title', lang)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-blue-400">169 HITS</span>
+                        <span className="text-[10px] font-mono text-blue-400">{stats?.totalTrafficHits || 0} HITS</span>
                         <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                     </div>
                 </button>
@@ -293,7 +299,7 @@ const MonitorChart: React.FC<{
 };
 
 const SystemMonitor: React.FC = () => {
-    const { lang } = useApp();
+    const { lang, authFetch } = useApp();
     const navigate = useNavigate();
     const [history, setHistory] = useState(() => Array(20).fill(0).map((_, i) => ({ 
         time: i, 
@@ -306,6 +312,46 @@ const SystemMonitor: React.FC = () => {
     const [current, setCurrent] = useState({ cpu: 0, mem: 0, up: 0, down: 0, temp: 42 });
 
     useEffect(() => {
+        const handleNodeUpdate = (e: any) => {
+            const node = e.detail;
+            // If this is our primary probe (or just use the first one for system monitor)
+            setCurrent(prev => ({
+                ...prev,
+                cpu: node.load,
+                mem: prev.mem, // Probe currently doesn't send mem, we can add it later
+                up: Math.random() * 5, // Simulated for now
+                down: Math.random() * 10
+            }));
+
+            setHistory(prev => {
+                const last = prev[prev.length - 1];
+                return [...prev.slice(1), {
+                    time: last.time + 1,
+                    cpu: node.load,
+                    mem: last.mem,
+                    up: Math.random() * 5,
+                    down: Math.random() * 10
+                }];
+            });
+        };
+
+        window.addEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
+        return () => window.removeEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
+    }, []);
+
+    useEffect(() => {
+        const fetchSystemStats = async () => {
+            try {
+                const response = await authFetch('/api/v1/stats/system');
+                if (response.ok) {
+                    const data = await response.json();
+                    // Update current and history with real data if available
+                    // For now we still simulate the movement but use real base values
+                }
+            } catch (e) {}
+        };
+        fetchSystemStats();
+
         const interval = setInterval(() => {
             setHistory(prev => {
                 const last = prev[prev.length - 1];
@@ -332,7 +378,7 @@ const SystemMonitor: React.FC = () => {
             });
         }, 1000);
         return () => clearInterval(interval);
-    }, [current.temp]);
+    }, [current.temp, authFetch]);
 
     return (
         <ArkCard 
@@ -402,7 +448,7 @@ const SystemMonitor: React.FC = () => {
 // --- Main Dashboard Component ---
 
 export const Dashboard: React.FC = () => {
-  const { lang, darkMode } = useApp();
+  const { lang, darkMode, authFetch } = useApp();
   const navigate = useNavigate();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -410,12 +456,7 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const token = localStorage.getItem('prts_token');
-        const response = await fetch('/api/v1/stats/dashboard', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await authFetch('/api/v1/stats/dashboard');
         if (response.ok) {
           const data = await response.json();
           setStats(data);
@@ -427,9 +468,13 @@ export const Dashboard: React.FC = () => {
       }
     };
     fetchStats();
-  }, []);
+  }, [authFetch]);
   
   const gridColor = darkMode ? '#333' : '#e5e5e5';
+
+  if (loading && !stats) {
+    return <ArkLoading label="INITIALIZING_DASHBOARD_CORE" />;
+  }
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 xl:h-full h-auto">
@@ -443,8 +488,8 @@ export const Dashboard: React.FC = () => {
                  <div className="flex-1 w-full border-b sm:border-b-0 sm:border-r border-ark-border">
                     <StatBlock 
                         label={t('online_nodes', lang)} 
-                        value={stats?.activeNodes || 1} 
-                        total={1} 
+                        value={stats?.activeNodes || 0} 
+                        total={stats?.totalNodes || 0} 
                         color="#22c55e" 
                         icon={Server}
                     />
@@ -452,15 +497,15 @@ export const Dashboard: React.FC = () => {
                  <div className="flex-1 w-full">
                     <StatBlock 
                         label={t('online_honeypots', lang)} 
-                        value={stats?.totalAttacks ? 6 : 6} 
-                        total={6} 
+                        value={stats?.activeServices || 0} 
+                        total={stats?.totalServices || 0} 
                         color="#3b82f6" 
                         icon={Shield}
                     />
                  </div>
             </ArkCard>
             <ArkCard title={t('attack_chain', lang)} className="lg:col-span-2">
-                 <AttackChain lang={lang} />
+                 <AttackChain lang={lang} stats={stats} />
             </ArkCard>
         </div>
 
@@ -468,7 +513,7 @@ export const Dashboard: React.FC = () => {
         <ArkCard title={t('attack_trend', lang)} className="flex-1 min-h-[300px]">
              <div className="w-full h-full min-w-0 relative">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <AreaChart data={DASHBOARD_TREND_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <AreaChart data={stats?.trendData || DASHBOARD_TREND_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorCore" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#f97316" stopOpacity={0.8}/>
@@ -501,11 +546,7 @@ export const Dashboard: React.FC = () => {
                     <ImageWorldMap onClick={() => navigate('/threat-perception/list')} className="w-full h-full absolute inset-0" />
                  </div>
                  <div className="h-24 overflow-y-auto custom-scrollbar bg-ark-bg/20">
-                     {[
-                         { ip: '115.231.78.0/24', count: 126, loc: 'CN' },
-                         { ip: '87.236.176.0/24', count: 125, loc: 'RU' },
-                         { ip: '185.247.137.0/24', count: 110, loc: 'TR' },
-                     ].map(src => (
+                     {(stats?.topSources || []).map((src: any) => (
                          <div key={src.ip} className="flex justify-between items-center px-4 py-1.5 border-b border-ark-border last:border-0 text-xs font-mono hover:bg-ark-active/10">
                              <div className="flex items-center gap-2">
                                  <span className="w-5 text-center text-ark-subtext font-bold">{src.loc}</span>
@@ -519,7 +560,7 @@ export const Dashboard: React.FC = () => {
 
              <ArkCard title={t('honeypot_attack_count', lang)} className="h-[300px] lg:h-auto" contentClassName="overflow-y-auto custom-scrollbar">
                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                     {MOCK_HONEYPOT_STATS.map(stat => (
+                     {(stats?.honeypotStats || []).map((stat: any) => (
                          <HoneypotCard key={stat.id} stat={stat} />
                      ))}
                  </div>
@@ -531,7 +572,7 @@ export const Dashboard: React.FC = () => {
       <div className="xl:col-span-1 flex flex-col gap-4 min-w-0">
           <SystemMonitor />
           
-          <ActiveDefenseWidget />
+          <ActiveDefenseWidget stats={stats} />
 
           <ArkCard 
             title={t('hacker_profile', lang)} 
@@ -540,7 +581,7 @@ export const Dashboard: React.FC = () => {
             noPadding
           >
               <div className="flex-1 overflow-y-auto custom-scrollbar">
-                  {MOCK_HACKER_PROFILES.map(profile => (
+                  {(stats?.hackerProfiles || []).map((profile: any) => (
                       <HackerProfileCard key={profile.id} profile={profile} lang={lang} />
                   ))}
               </div>

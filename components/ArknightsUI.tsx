@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronRight, Loader2, X, ChevronUp, ChevronDown } from 'lucide-react';
 
 // --- Types ---
 interface ArkProps {
@@ -116,16 +117,80 @@ export const ArkBadge: React.FC<{ type: 'info' | 'warn' | 'error' | 'success' | 
   );
 };
 
-export const ArkInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
-  <div className="relative group w-full">
-    <input 
-      {...props}
-      className={`w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text focus:outline-none focus:border-ark-primary transition-colors font-mono placeholder-ark-subtext/40 ${props.className}`}
-    />
-    {/* Active indicator */}
-    <div className="absolute bottom-0 left-0 w-0 h-[2px] bg-ark-primary group-focus-within:w-full transition-all duration-300" />
+export const ArkLoading: React.FC<{ label?: string, fullPage?: boolean }> = ({ label = 'LOADING_DATA', fullPage = false }) => (
+  <div className={`flex flex-col items-center justify-center gap-4 ${fullPage ? 'fixed inset-0 z-[200] bg-ark-bg/80 backdrop-blur-sm' : 'w-full h-full min-h-[200px]'}`}>
+    <div className="relative w-16 h-16">
+      <div className="absolute inset-0 border-2 border-ark-primary/20 rounded-full" />
+      <div className="absolute inset-0 border-t-2 border-ark-primary rounded-full animate-spin" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-8 h-8 bg-ark-primary/10 animate-pulse flex items-center justify-center">
+          <div className="w-4 h-4 bg-ark-primary rotate-45" />
+        </div>
+      </div>
+    </div>
+    <div className="text-xs font-mono text-ark-primary tracking-[0.2em] animate-pulse uppercase">
+      {label}...
+    </div>
   </div>
 );
+
+export const ArkInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleStep = (delta: number) => {
+    if (inputRef.current) {
+      const val = parseFloat(inputRef.current.value) || 0;
+      const step = parseFloat(inputRef.current.step) || 1;
+      const newVal = val + (delta * step);
+      
+      // Respect min/max
+      const min = inputRef.current.min !== "" ? parseFloat(inputRef.current.min) : -Infinity;
+      const max = inputRef.current.max !== "" ? parseFloat(inputRef.current.max) : Infinity;
+      
+      if (newVal >= min && newVal <= max) {
+        inputRef.current.value = newVal.toString();
+        // Trigger onChange manually
+        const event = new Event('input', { bubbles: true });
+        inputRef.current.dispatchEvent(event);
+        if (props.onChange) {
+          props.onChange({ target: inputRef.current } as any);
+        }
+      }
+    }
+  };
+
+  return (
+    <div className="relative group w-full">
+      <input 
+        {...props}
+        ref={inputRef}
+        className={`w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text focus:outline-none focus:border-ark-primary transition-colors font-mono placeholder-ark-subtext/40 ${props.type === 'number' ? 'pr-8' : ''} ${props.className}`}
+      />
+      
+      {props.type === 'number' && (
+        <div className="absolute right-0 top-0 h-full flex flex-col border-l border-gray-500/30">
+          <button 
+            type="button"
+            onClick={() => handleStep(1)}
+            className="flex-1 px-1 hover:bg-ark-primary/20 text-ark-subtext hover:text-ark-primary transition-colors border-b border-gray-500/30"
+          >
+            <ChevronUp size={12} />
+          </button>
+          <button 
+            type="button"
+            onClick={() => handleStep(-1)}
+            className="flex-1 px-1 hover:bg-ark-primary/20 text-ark-subtext hover:text-ark-primary transition-colors"
+          >
+            <ChevronDown size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Active indicator */}
+      <div className="absolute bottom-0 left-0 w-0 h-[2px] bg-ark-primary group-focus-within:w-full transition-all duration-300" />
+    </div>
+  );
+};
 
 // Consistent Page Header
 export const ArkPageHeader: React.FC<{ icon: React.ReactNode, title: string, subtitle?: string, extra?: React.ReactNode }> = ({ icon, title, subtitle, extra }) => (
@@ -177,5 +242,82 @@ export const ArkHexagon: React.FC<{
                  <span className="text-[9px] text-ark-subtext font-mono uppercase mt-1 leading-tight tracking-tight">{label}</span>
              </div>
         </div>
+    );
+};
+
+// --- Modal Component ---
+export const ArkModal: React.FC<{ 
+    isOpen: boolean, 
+    onClose: () => void, 
+    title: string, 
+    icon?: React.ReactNode,
+    children: React.ReactNode,
+    footer?: React.ReactNode,
+    maxWidth?: string
+}> = ({ isOpen, onClose, title, icon, children, footer, maxWidth = 'max-w-md' }) => {
+    const [shouldRender, setShouldRender] = React.useState(isOpen);
+    const [isAnimating, setIsAnimating] = React.useState(false);
+
+    React.useEffect(() => {
+        if (isOpen) {
+            setShouldRender(true);
+            setIsAnimating(true);
+        } else {
+            setIsAnimating(false);
+            const timer = setTimeout(() => {
+                setShouldRender(false);
+            }, 150); // Match animation duration
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen]);
+
+    if (!shouldRender) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div 
+                className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+                    isAnimating ? 'opacity-100' : 'opacity-0'
+                }`} 
+                onClick={onClose}
+            />
+            
+            {/* Modal Content */}
+            <div className={`relative w-full ${maxWidth} bg-ark-panel border border-ark-border shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden ${
+                isAnimating ? 'animate-ark-modal-in' : 'animate-ark-modal-out'
+            }`}>
+                {/* Decorative Corners */}
+                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-ark-primary" />
+                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-ark-primary" />
+                
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b border-ark-border bg-ark-bg/30">
+                    <div className="flex items-center gap-3">
+                        {icon && <div className="text-ark-primary">{icon}</div>}
+                        <h3 className="text-lg font-bold text-ark-text uppercase tracking-widest">{title}</h3>
+                    </div>
+                    <button 
+                        onClick={onClose}
+                        className="text-ark-subtext hover:text-ark-text transition-colors p-1 hover:bg-ark-active/20 rounded-sm"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                {/* Body */}
+                <div className="p-6 text-ark-text">
+                    {children}
+                </div>
+                
+                {/* Footer */}
+                {footer && (
+                    <div className="p-4 border-t border-ark-border bg-ark-bg/20 flex justify-end gap-3">
+                        {footer}
+                    </div>
+                )}
+            </div>
+        </div>,
+        document.body
     );
 };

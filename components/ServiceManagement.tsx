@@ -1,9 +1,9 @@
-import React from 'react';
-import { ArkButton } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { MOCK_SERVICES } from '../constants';
 import { X, ChevronLeft, ChevronRight, HelpCircle, FileEdit, Cloud } from 'lucide-react';
+import { HoneypotService } from '../types';
 
 const FilterInput: React.FC<{ label?: string, placeholder?: string, width?: string, children?: React.ReactNode }> = ({ label, placeholder, width = "w-full", children }) => (
     <div className={`flex items-center border border-ark-border bg-ark-panel h-[32px] ${width}`}>
@@ -25,7 +25,37 @@ const FilterSelect: React.FC<{ options: string[] }> = ({ options }) => (
 );
 
 export const ServiceManagement: React.FC = () => {
-    const { lang } = useApp();
+    const { lang, authFetch } = useApp();
+    const [services, setServices] = useState<HoneypotService[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchServices = async () => {
+            try {
+                const res = await authFetch('/api/v1/services');
+                if (res.ok) {
+                    const data = await res.json();
+                    const mapped = data.map((item: any) => ({
+                        id: item.id.toString(),
+                        name: item.name,
+                        category: item.category,
+                        interactionType: item.interaction_type,
+                        refTemplateCount: item.ref_template_count || 0,
+                        refNodeCount: item.ref_node_count || 0,
+                        defaultPort: item.default_port,
+                        description: item.description,
+                        isCloud: item.is_cloud
+                    }));
+                    setServices(mapped);
+                }
+            } catch (e) {
+                console.error("Failed to fetch services", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchServices();
+    }, [authFetch]);
 
     return (
         <div className="flex flex-col gap-4 pb-6 min-h-full">
@@ -58,6 +88,8 @@ export const ServiceManagement: React.FC = () => {
 
             {/* Table */}
             <div className="flex-1 flex flex-col min-h-[500px] bg-ark-panel border border-ark-border overflow-hidden shadow-sm relative">
+                {loading && <ArkLoading label="FETCHING_SERVICES" />}
+                
                 <div className="overflow-x-auto custom-scrollbar flex-1">
                      <table className="w-full text-left text-sm min-w-[1400px]">
                          <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
@@ -76,7 +108,7 @@ export const ServiceManagement: React.FC = () => {
                              </tr>
                          </thead>
                          <tbody className="divide-y divide-ark-border font-mono text-xs">
-                             {MOCK_SERVICES.map((service) => (
+                             {services.map((service) => (
                                  <tr key={service.id} className="hover:bg-ark-active/5 transition-colors group">
                                      <td className="p-4">
                                          <div className="flex items-center gap-2">
@@ -106,13 +138,9 @@ export const ServiceManagement: React.FC = () => {
                                          </div>
                                      </td>
                                      <td className="p-4 text-center">
-                                         {service.interactionType === 'low' && !service.isCloud ? (
-                                             <button className="text-ark-subtext hover:text-ark-primary transition-colors" title="Edit">
-                                                 <FileEdit size={14} />
-                                             </button>
-                                         ) : (
-                                             <span className="text-ark-subtext opacity-30">--</span>
-                                         )}
+                                         <button className="text-ark-subtext hover:text-ark-primary transition-colors" title="Edit">
+                                             <FileEdit size={14} />
+                                         </button>
                                      </td>
                                  </tr>
                              ))}
@@ -122,17 +150,11 @@ export const ServiceManagement: React.FC = () => {
 
                 {/* Footer Pagination */}
                 <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs font-mono text-ark-subtext">
-                    <span>{t('total_records', lang)} {MOCK_SERVICES.length * 9}</span> {/* Mocking total count to match screenshot */}
+                    <span>{t('total_records', lang)} {services.length}</span>
                     <div className="flex gap-1">
                         <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronLeft size={12} /></button>
                         <button className="w-6 h-6 flex items-center justify-center border border-ark-primary bg-ark-primary text-black font-bold">1</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">2</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">3</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">4</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">5</button>
-                        <span className="flex items-end px-1">...</span>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">9</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors"><ChevronRight size={12} /></button>
+                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronRight size={12} /></button>
                     </div>
                 </div>
             </div>

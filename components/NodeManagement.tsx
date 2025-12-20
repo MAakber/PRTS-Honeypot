@@ -1,18 +1,28 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArkButton } from './ArknightsUI';
-import { MOCK_NODES } from '../constants';
+import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { Server, Skull, Monitor, AlertCircle, FileText, Plus, Search, RefreshCw, X, ChevronRight, Share2, Grid, List, MoreHorizontal, Pause, Play, Download, Settings } from 'lucide-react';
+import { Server, Skull, Monitor, AlertCircle, FileText, Plus, Search, RefreshCw, X, ChevronRight, Share2, Grid, List, MoreHorizontal, Pause, Play, Download, Settings, ShieldCheck } from 'lucide-react';
 import { NodeStatus, Lang } from '../types';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { useNotification } from './NotificationSystem';
 
 // --- Sub-Components ---
 
-const NodeTrafficSparkline: React.FC<{ data: number[] }> = ({ data }) => {
-    const chartData = data.map((val, i) => ({ i, val }));
+const NodeTrafficSparkline: React.FC<{ data: any }> = ({ data }) => {
+    let plotData: number[] = [];
+    if (Array.isArray(data)) {
+        plotData = data;
+    } else if (typeof data === 'string') {
+        try {
+            plotData = JSON.parse(data);
+        } catch (e) {
+            plotData = [];
+        }
+    }
+    
+    const chartData = (Array.isArray(plotData) ? plotData : []).map((val, i) => ({ i, val }));
     return (
         <div className="h-8 w-32">
             <LineChart width={128} height={32} data={chartData}>
@@ -49,41 +59,66 @@ const FilterSelect: React.FC<{ options: string[] }> = ({ options }) => (
 );
 
 const OS_ICON_MAP: Record<string, string> = {
-    'alpine': 'https://upload.wikimedia.org/wikipedia/commons/e/e6/Alpine_Linux.svg', // Placeholder URLs
+    'alpine': 'https://upload.wikimedia.org/wikipedia/commons/e/e6/Alpine_Linux.svg',
     'linux': 'https://upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg',
+    'ubuntu': 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo-ubuntu_no_text.svg',
+    'debian': 'https://upload.wikimedia.org/wikipedia/commons/6/66/Openlogo-debian.svg',
+    'centos': 'https://upload.wikimedia.org/wikipedia/commons/9/9e/CentOS_logo.svg',
     'windows': 'https://upload.wikimedia.org/wikipedia/commons/5/5f/Windows_logo_-_2012.svg',
     'mac': 'https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg'
 };
 
-const StatusReport: React.FC<{ lang: Lang }> = ({ lang }) => (
-    <div className="bg-ark-panel border border-ark-border p-4 mb-4 flex flex-col md:flex-row items-center gap-6 shadow-sm">
-        <div className="flex items-center gap-2 font-bold text-ark-text whitespace-nowrap">
-            <FileText className="text-ark-primary" size={18} />
-            {t('nm_report_title', lang)}
-        </div>
-        <div className="h-8 w-[1px] bg-ark-border hidden md:block" />
-        <div className="flex flex-wrap gap-6 text-sm">
-            <div className="flex items-center gap-2">
-                <span className="text-ark-subtext">{t('nm_report_status', lang)}</span>
-                <span className="text-yellow-500 flex items-center gap-1 font-bold bg-yellow-500/10 px-2 py-0.5 rounded-sm border border-yellow-500/30">
-                    <AlertCircle size={14} /> {t('nm_btn_offline', lang)}
-                </span>
-                <button className="px-2 py-0.5 bg-ark-active/20 text-ark-text hover:text-ark-primary text-xs border border-ark-border transition-colors">
-                    {t('nm_btn_view', lang)}
-                </button>
+const getOSIcon = (os: string) => {
+    const lowerOS = os.toLowerCase();
+    if (lowerOS.includes('windows')) return OS_ICON_MAP['windows'];
+    if (lowerOS.includes('ubuntu')) return OS_ICON_MAP['ubuntu'];
+    if (lowerOS.includes('debian')) return OS_ICON_MAP['debian'];
+    if (lowerOS.includes('centos')) return OS_ICON_MAP['centos'];
+    if (lowerOS.includes('alpine')) return OS_ICON_MAP['alpine'];
+    if (lowerOS.includes('darwin') || lowerOS.includes('mac')) return OS_ICON_MAP['mac'];
+    return OS_ICON_MAP['linux'];
+};
+
+const StatusReport: React.FC<{ lang: Lang, nodes: NodeStatus[] }> = ({ lang, nodes }) => {
+    const offlineCount = nodes.filter(n => n.status === 'offline').length;
+    const warningCount = nodes.filter(n => n.status === 'warning').length;
+
+    return (
+        <div className="bg-ark-panel border border-ark-border p-4 mb-4 flex flex-col md:flex-row items-center gap-6 shadow-sm">
+            <div className="flex items-center gap-2 font-bold text-ark-text whitespace-nowrap">
+                <FileText className="text-ark-primary" size={18} />
+                {t('nm_report_title', lang)}
             </div>
-            <div className="flex items-center gap-2">
-                <span className="text-ark-subtext">{t('nm_report_port', lang)}</span>
-                <span className="text-red-500 flex items-center gap-1 font-bold bg-red-500/10 px-2 py-0.5 rounded-sm border border-red-500/30">
-                     <AlertCircle size={14} /> {t('nm_btn_failure', lang)}
-                </span>
-                <button className="px-2 py-0.5 bg-ark-active/20 text-ark-text hover:text-ark-primary text-xs border border-ark-border transition-colors">
-                    {t('nm_btn_view', lang)}
-                </button>
+            <div className="h-8 w-[1px] bg-ark-border hidden md:block" />
+            <div className="flex flex-wrap gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                    <span className="text-ark-subtext">{t('nm_report_status', lang)}</span>
+                    {offlineCount > 0 ? (
+                        <span className="text-red-500 flex items-center gap-1 font-bold bg-red-500/10 px-2 py-0.5 rounded-sm border border-red-500/30">
+                            <AlertCircle size={14} /> {offlineCount} {t('nm_btn_offline', lang)}
+                        </span>
+                    ) : (
+                        <span className="text-green-500 flex items-center gap-1 font-bold bg-green-500/10 px-2 py-0.5 rounded-sm border border-green-500/30">
+                            <ShieldCheck size={14} /> {t('status_normal', lang)}
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-ark-subtext">{t('nm_report_port', lang)}</span>
+                    {warningCount > 0 ? (
+                        <span className="text-yellow-500 flex items-center gap-1 font-bold bg-yellow-500/10 px-2 py-0.5 rounded-sm border border-yellow-500/30">
+                            <AlertCircle size={14} /> {warningCount} {t('nm_btn_failure', lang)}
+                        </span>
+                    ) : (
+                        <span className="text-green-500 flex items-center gap-1 font-bold bg-green-500/10 px-2 py-0.5 rounded-sm border border-green-500/30">
+                            <ShieldCheck size={14} /> {t('status_normal', lang)}
+                        </span>
+                    )}
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 // Flow Diagram (Mini)
 const ArchitectureDiagram: React.FC<{ lang: Lang }> = ({ lang }) => (
@@ -126,8 +161,8 @@ export const NodeManagement: React.FC = () => {
     const [nodes, setNodes] = useState<NodeStatus[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const fetchNodes = async () => {
-        setLoading(true);
+    const fetchNodes = async (showLoading = true) => {
+        if (showLoading) setLoading(true);
         try {
             const token = localStorage.getItem('prts_token');
             const response = await fetch('/api/v1/nodes', {
@@ -138,31 +173,89 @@ export const NodeManagement: React.FC = () => {
             if (response.ok) {
                 const data = await response.json();
                 setNodes(data);
-            } else {
-                setNodes(MOCK_NODES);
             }
         } catch (error) {
             console.error("Failed to fetch nodes", error);
-            setNodes(MOCK_NODES);
         } finally {
-            setLoading(false);
+            if (showLoading) setLoading(false);
         }
     };
 
     useEffect(() => {
         fetchNodes();
+
+        const handleNodeUpdate = (e: any) => {
+            const updatedNode = e.detail;
+            setNodes(prev => {
+                // If we are currently loading, we might want to skip this or handle it carefully
+                // but usually, we want the latest data.
+                const index = prev.findIndex(n => n.id === updatedNode.id);
+                if (index === -1) {
+                    // If it's a new node not in our list, add it
+                    return [updatedNode, ...prev];
+                }
+                
+                // Update existing node
+                const newNodes = [...prev];
+                newNodes[index] = { ...newNodes[index], ...updatedNode };
+                return newNodes;
+            });
+        };
+
+        window.addEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
+        
+        // Auto-refresh every 30s as a fallback
+        const interval = setInterval(() => fetchNodes(false), 30000);
+
+        return () => {
+            window.removeEventListener('PRTS_NODE_UPDATE', handleNodeUpdate);
+            clearInterval(interval);
+        };
     }, []);
     
-    const handleStart = (nodeName: string) => {
-        notify('success', t('op_success', lang), `${t('op_node_start', lang)} (${nodeName})`);
+    const sendCommand = async (nodeId: string, command: string) => {
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch('/api/v1/nodes/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ nodeId, command })
+            });
+            return response.ok;
+        } catch (error) {
+            console.error("Failed to send command", error);
+            return false;
+        }
     };
 
-    const handleStop = (nodeName: string) => {
-        notify('warning', t('op_success', lang), `${t('op_node_stop', lang)} (${nodeName})`);
+    const handleStart = async (node: NodeStatus) => {
+        const success = await sendCommand(node.id, 'START');
+        if (success) {
+            notify('success', t('op_success', lang), `${t('op_node_start', lang)} (${node.name})`);
+        } else {
+            notify('error', t('op_failed', lang), `Failed to send START command to ${node.name}`);
+        }
     };
 
-    const handleRestart = (nodeName: string) => {
-        notify('info', t('op_success', lang), `${t('op_node_restart', lang)} (${nodeName})`);
+    const handleStop = async (node: NodeStatus) => {
+        const success = await sendCommand(node.id, 'STOP');
+        if (success) {
+            notify('warning', t('op_success', lang), `${t('op_node_stop', lang)} (${node.name})`);
+        } else {
+            notify('error', t('op_failed', lang), `Failed to send STOP command to ${node.name}`);
+        }
+    };
+
+    const handleRestart = async (node: NodeStatus) => {
+        const success = await sendCommand(node.id, 'RESTART');
+        if (success) {
+            notify('info', t('op_success', lang), `${t('op_node_restart', lang)} (${node.name})`);
+        } else {
+            notify('error', t('op_failed', lang), `Failed to send RESTART command to ${node.name}`);
+        }
     };
 
     const handleDelete = (nodeName: string) => {
@@ -195,7 +288,7 @@ export const NodeManagement: React.FC = () => {
             </div>
 
             {/* Status Report */}
-            <StatusReport lang={lang} />
+            <StatusReport lang={lang} nodes={nodes} />
 
             {/* Main Content Area: Sidebar + Table */}
             <div className="flex flex-col lg:flex-row gap-4 flex-1">
@@ -204,13 +297,13 @@ export const NodeManagement: React.FC = () => {
                 <div className="w-full lg:w-64 bg-ark-panel border border-ark-border flex flex-col shadow-sm flex-shrink-0">
                     <div className="p-3 border-b border-ark-border flex items-center justify-between">
                         <span className="text-sm font-bold text-ark-text">{t('nm_group_all', lang)}</span>
-                        <span className="text-xs text-ark-subtext">({nodes.length || MOCK_NODES.length})</span>
+                        <span className="text-xs text-ark-subtext">({nodes.length})</span>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 max-h-[200px] lg:max-h-full">
                          <button className="w-full text-left px-3 py-2 text-xs font-mono text-ark-primary bg-ark-active/20 border-l-2 border-ark-primary hover:bg-ark-active/30 transition-colors">
                              {t('nm_group_all', lang)}
                          </button>
-                         {(nodes.length > 0 ? nodes : MOCK_NODES).map(node => (
+                         {nodes.map(node => (
                              <button key={node.id} className="w-full text-left px-3 py-2 text-xs font-mono text-ark-subtext hover:text-ark-text hover:bg-ark-active/10 border-l-2 border-transparent transition-colors flex items-center gap-2">
                                  <div className={`w-1.5 h-1.5 rounded-full ${node.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
                                  {node.name}
@@ -242,8 +335,13 @@ export const NodeManagement: React.FC = () => {
                                  <ArkButton variant="primary" size="sm" className="bg-ark-text text-ark-bg hover:bg-ark-primary hover:text-white">
                                      <Plus size={14} className="mr-1" /> {t('nm_add', lang)}
                                  </ArkButton>
-                                 <ArkButton variant="ghost" className="h-[32px] w-[32px] p-0 flex items-center justify-center">
-                                     <RefreshCw size={14} />
+                                 <ArkButton 
+                                    variant="ghost" 
+                                    className="h-[32px] w-[32px] p-0 flex items-center justify-center"
+                                    onClick={fetchNodes}
+                                    title={t('nm_btn_refresh', lang) || 'Refresh'}
+                                 >
+                                     <RefreshCw size={14} className={loading ? 'animate-spin text-ark-primary' : ''} />
                                  </ArkButton>
                              </div>
                         </div>
@@ -251,111 +349,120 @@ export const NodeManagement: React.FC = () => {
 
                     {/* Node List - Expanded View */}
                     <div className="flex-1 flex flex-col gap-4">
-                        {(nodes.length > 0 ? nodes : MOCK_NODES).map(node => (
-                            <div key={node.id} className="bg-ark-panel border border-ark-border shadow-sm group hover:border-ark-primary/50 transition-all duration-300">
-                                {/* Header / Main Info */}
-                                <div className="p-4 flex flex-col md:flex-row items-center gap-4 md:gap-8 border-b border-ark-border/50 bg-ark-bg/50">
-                                    <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
-                                        <div className={`w-2 h-12 ${node.status === 'online' ? 'bg-green-500' : node.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} />
-                                        <div className="flex-1">
-                                            <h3 className="text-lg font-bold text-ark-text flex items-center gap-2">
-                                                {node.name}
-                                                <span className={`px-2 py-0.5 text-[10px] uppercase font-bold border rounded-sm ${
-                                                    node.status === 'online' ? 'border-green-500/30 text-green-500 bg-green-500/10' : 
-                                                    node.status === 'warning' ? 'border-yellow-500/30 text-yellow-500 bg-yellow-500/10' : 
-                                                    'border-red-500/30 text-red-500 bg-red-500/10'
-                                                }`}>
-                                                    {node.status}
-                                                </span>
-                                            </h3>
-                                            <p className="text-xs text-ark-subtext font-mono mt-0.5 flex items-center gap-3">
-                                                <span>ID: {node.id}</span>
-                                                <span>|</span>
-                                                <span className="flex items-center gap-1">
-                                                    <img src={OS_ICON_MAP[node.os]} className="w-3 h-3 grayscale opacity-70" alt={node.os} />
-                                                    {node.os.toUpperCase()}
-                                                </span>
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Stats Grid - Horizontal */}
-                                    <div className="flex flex-wrap gap-6 md:gap-12 items-center justify-start md:justify-end w-full md:w-auto text-xs font-mono text-ark-subtext">
-                                        <div>
-                                            <span className="block opacity-50 mb-1">{t('nm_label_uptime', lang)}</span>
-                                            <span className="text-ark-text font-bold">14d 02h 12m</span>
-                                        </div>
-                                        <div>
-                                            <span className="block opacity-50 mb-1">{t('nm_label_version', lang)}</span>
-                                            <span className="text-ark-text font-bold">v3.3.6</span>
-                                        </div>
-                                        <div>
-                                            <span className="block opacity-50 mb-1">{t('nm_label_load', lang)}</span>
-                                            <div className="w-24 h-2 bg-ark-border rounded-full overflow-hidden">
-                                                <div 
-                                                    className={`h-full ${node.load > 80 ? 'bg-red-500' : node.load > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} 
-                                                    style={{ width: `${node.load}%` }} 
-                                                />
+                        {loading ? (
+                            <ArkLoading label="FETCHING_NODE_DATA" />
+                        ) : nodes.length > 0 ? (
+                            nodes.map(node => (
+                                <div key={node.id} className="bg-ark-panel border border-ark-border shadow-sm group hover:border-ark-primary/50 transition-all duration-300">
+                                    {/* Header / Main Info */}
+                                    <div className="p-4 flex flex-col md:flex-row items-center gap-4 md:gap-8 border-b border-gray-700/30 bg-ark-bg/50">
+                                        <div className="flex items-center gap-4 flex-1 w-full md:w-auto">
+                                            <div className={`w-2 h-12 ${node.status === 'online' ? 'bg-green-500' : node.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                                            <div className="flex-1">
+                                                <h3 className="text-lg font-bold text-ark-text flex items-center gap-2">
+                                                    {node.name}
+                                                    <span className={`px-2 py-0.5 text-[10px] uppercase font-bold border rounded-sm ${
+                                                        node.status === 'online' ? 'border-green-500/30 text-green-500 bg-green-500/10' : 
+                                                        node.status === 'warning' ? 'border-yellow-500/30 text-yellow-500 bg-yellow-500/10' : 
+                                                        'border-red-500/30 text-red-500 bg-red-500/10'
+                                                    }`}>
+                                                        {node.status}
+                                                    </span>
+                                                </h3>
+                                                <p className="text-xs text-ark-subtext font-mono mt-0.5 flex items-center gap-3">
+                                                    <span>ID: {node.id}</span>
+                                                    <span>|</span>
+                                                    <span className="flex items-center gap-1">
+                                                        <img src={getOSIcon(node.os)} className="w-3 h-3 grayscale opacity-70" alt={node.os} />
+                                                        {node.os.toUpperCase()}
+                                                    </span>
+                                                </p>
                                             </div>
                                         </div>
-                                        <div>
-                                            <span className="block opacity-50 mb-1">{t('nm_filter_traffic', lang)}</span>
-                                            <NodeTrafficSparkline data={node.trafficHistory} />
+
+                                        {/* Stats Grid - Horizontal */}
+                                        <div className="flex flex-wrap gap-6 md:gap-12 items-center justify-start md:justify-end w-full md:w-auto text-xs font-mono text-ark-subtext">
+                                            <div>
+                                                <span className="block opacity-50 mb-1">{t('nm_label_uptime', lang)}</span>
+                                                <span className="text-ark-text font-bold">{node.uptime || '0d 00h 00m'}</span>
+                                            </div>
+                                            <div>
+                                                <span className="block opacity-50 mb-1">{t('nm_label_version', lang)}</span>
+                                                <span className="text-ark-text font-bold">{node.version || 'v1.0.0'}</span>
+                                            </div>
+                                            <div>
+                                                <span className="block opacity-50 mb-1">{t('nm_label_load', lang)}</span>
+                                                <div className="w-24 h-2 bg-ark-border rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full ${node.load > 80 ? 'bg-red-500' : node.load > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} 
+                                                        style={{ width: `${node.load}%` }} 
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span className="block opacity-50 mb-1">{t('nm_filter_traffic', lang)}</span>
+                                                <NodeTrafficSparkline data={node.trafficHistory} />
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-2 border-l border-ark-border pl-4 ml-4">
+                                             <button className="p-2 hover:bg-ark-active/20 rounded-sm text-ark-subtext hover:text-ark-primary transition-colors" title="Console">
+                                                 <List size={16} />
+                                             </button>
+                                             <button className="p-2 hover:bg-ark-active/20 rounded-sm text-ark-subtext hover:text-ark-primary transition-colors" title="Settings">
+                                                 <Settings size={16} />
+                                             </button>
+                                             <button className="p-2 hover:bg-ark-active/20 rounded-sm text-ark-subtext hover:text-ark-primary transition-colors" title="More">
+                                                 <MoreHorizontal size={16} />
+                                             </button>
                                         </div>
                                     </div>
                                     
-                                    {/* Actions */}
-                                    <div className="flex items-center gap-2 border-l border-ark-border pl-4 ml-4">
-                                         <button className="p-2 hover:bg-ark-active/20 rounded-sm text-ark-subtext hover:text-ark-primary transition-colors" title="Console">
-                                             <List size={16} />
-                                         </button>
-                                         <button className="p-2 hover:bg-ark-active/20 rounded-sm text-ark-subtext hover:text-ark-primary transition-colors" title="Settings">
-                                             <Settings size={16} />
-                                         </button>
-                                         <button className="p-2 hover:bg-ark-active/20 rounded-sm text-ark-subtext hover:text-ark-primary transition-colors" title="More">
-                                             <MoreHorizontal size={16} />
-                                         </button>
+                                    {/* Expanded Details - always visible for demo aesthetics */}
+                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono text-ark-subtext bg-ark-panel">
+                                        <div>
+                                            <span className="opacity-50 block mb-1">{t('nm_tbl_interface', lang)}:</span>
+                                            <span className="text-ark-text">{node.interface || 'eth0'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="opacity-50 block mb-1">{t('nm_tbl_ip', lang)}:</span>
+                                            <span className="text-ark-text">{node.ip}</span>
+                                        </div>
+                                        <div>
+                                            <span className="opacity-50 block mb-1">{t('nm_tbl_mac', lang)}:</span>
+                                            <span className="text-ark-text">{node.mac || '00:00:00:00:00:00'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="opacity-50 block mb-1">{t('nm_col_template', lang)}:</span>
+                                            <span className="text-ark-primary underline cursor-pointer">{node.template}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Action Bar */}
+                                    <div className="bg-ark-active/5 p-2 flex justify-end gap-3 border-t border-ark-border">
+                                        <button onClick={() => handleStart(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
+                                            <Play size={12} /> {t('nm_btn_start', lang)}
+                                        </button>
+                                        <button onClick={() => handleStop(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
+                                            <Pause size={12} /> {t('nm_btn_stop', lang)}
+                                        </button>
+                                        <button onClick={() => handleRestart(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
+                                            <RefreshCw size={12} /> {t('nm_restart', lang)}
+                                        </button>
+                                        <div className="w-[1px] h-4 bg-ark-border mx-2" />
+                                        <button onClick={() => handleDelete(node.name)} className="flex items-center gap-1 text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">
+                                            <X size={12} /> {t('nm_btn_delete', lang)}
+                                        </button>
                                     </div>
                                 </div>
-                                
-                                {/* Expanded Details - always visible for demo aesthetics */}
-                                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono text-ark-subtext bg-ark-panel">
-                                    <div>
-                                        <span className="opacity-50 block mb-1">{t('nm_tbl_interface', lang)}:</span>
-                                        <span className="text-ark-text">eth0</span>
-                                    </div>
-                                    <div>
-                                        <span className="opacity-50 block mb-1">{t('nm_tbl_ip', lang)}:</span>
-                                        <span className="text-ark-text">{node.ip}</span>
-                                    </div>
-                                    <div>
-                                        <span className="opacity-50 block mb-1">{t('nm_tbl_mac', lang)}:</span>
-                                        <span className="text-ark-text">00:1B:44:11:3A:B7</span>
-                                    </div>
-                                    <div>
-                                        <span className="opacity-50 block mb-1">{t('nm_col_template', lang)}:</span>
-                                        <span className="text-ark-primary underline cursor-pointer">{node.template}</span>
-                                    </div>
-                                </div>
-                                
-                                {/* Action Bar */}
-                                <div className="bg-ark-active/5 p-2 flex justify-end gap-3 border-t border-ark-border">
-                                    <button onClick={() => handleStart(node.name)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
-                                        <Play size={12} /> {t('nm_btn_start', lang)}
-                                    </button>
-                                    <button onClick={() => handleStop(node.name)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
-                                        <Pause size={12} /> {t('nm_btn_stop', lang)}
-                                    </button>
-                                    <button onClick={() => handleRestart(node.name)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
-                                        <RefreshCw size={12} /> {t('nm_restart', lang)}
-                                    </button>
-                                    <div className="w-[1px] h-4 bg-ark-border mx-2" />
-                                    <button onClick={() => handleDelete(node.name)} className="flex items-center gap-1 text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">
-                                        <X size={12} /> {t('nm_btn_delete', lang)}
-                                    </button>
-                                </div>
+                            ))
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center bg-ark-panel border border-ark-border border-dashed p-20 opacity-50">
+                                <Server size={48} className="text-ark-subtext mb-4" />
+                                <p className="text-sm font-mono">{t('no_data', lang)}</p>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
             </div>

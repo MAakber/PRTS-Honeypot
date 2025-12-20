@@ -1,10 +1,9 @@
 
-import React, { useState } from 'react';
-import { ArkCard, ArkButton } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkCard, ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
 import { Inbox, ChevronRight, Calendar, Download, Upload, FileText, Activity, Globe, Plus, Box } from 'lucide-react';
-import { MOCK_DECOY_LOGS } from '../constants';
 import { ArkDateRangePicker } from './ArkDateRangePicker';
 import { useNotification } from './NotificationSystem';
 
@@ -43,11 +42,32 @@ const DecoyAnimation = () => {
 };
 
 export const CompromisePerception: React.FC = () => {
-    const { lang, modules, toggleModule } = useApp();
+    const { lang, modules, toggleModule, authFetch } = useApp();
     const { notify } = useNotification();
     const [activeTab, setActiveTab] = useState<'data' | 'mgmt'>('data');
     const enabled = modules.persistence;
     const [dateRange, setDateRange] = useState({ start: '2025-11-06T00:00', end: '2025-12-05T23:59' });
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const response = await authFetch('/api/v1/decoys');
+            if (response.ok) {
+                const data = await response.json();
+                setLogs(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch decoy logs", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLogs();
+    }, [authFetch]);
 
     const getStatusStyle = (status: string) => {
         if (status === 'Compromised') return 'text-red-500 bg-red-500/10 border-red-500/30';
@@ -188,59 +208,63 @@ export const CompromisePerception: React.FC = () => {
 
                     {/* Table Area */}
                     <div className="flex-1 flex flex-col min-h-[500px] bg-ark-panel border border-ark-border overflow-hidden shadow-sm">
-                        <div className="overflow-auto custom-scrollbar flex-1">
-                            <table className="w-full text-left text-sm min-w-[1400px]">
-                                <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
-                                    <tr>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_type', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_status', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_device', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_source', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_time', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_result', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_decoy', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_deploy_time', lang)}</th>
-                                        <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_node', lang)}</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-ark-border font-mono text-xs">
-                                    {MOCK_DECOY_LOGS.length > 0 ? (
-                                        MOCK_DECOY_LOGS.map((log) => (
-                                            <tr key={log.id} className="hover:bg-ark-active/5 transition-colors group">
-                                                <td className="p-4 font-bold text-ark-text">{log.type}</td>
-                                                <td className="p-4">
-                                                    <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase font-bold ${getStatusStyle(log.status)}`}>
-                                                        {log.status === 'Compromised' ? t('cp_status_compromised', lang) : t('cp_status_untriggered', lang)}
-                                                    </span>
-                                                </td>
-                                                <td className="p-4 text-ark-text">{log.device}</td>
-                                                <td className="p-4 text-ark-subtext">{log.sourceIp}</td>
-                                                <td className="p-4 text-ark-subtext">{log.time}</td>
-                                                <td className="p-4 text-ark-text">{log.result}</td>
-                                                <td className="p-4 text-ark-primary">{log.decoyName}</td>
-                                                <td className="p-4 text-ark-subtext">{log.deployTime}</td>
-                                                <td className="p-4 text-ark-text">{log.node}</td>
-                                            </tr>
-                                        ))
-                                    ) : (
+                        {loading ? (
+                            <ArkLoading label="FETCHING_DECOY_DATA" />
+                        ) : (
+                            <div className="overflow-auto custom-scrollbar flex-1">
+                                <table className="w-full text-left text-sm min-w-[1400px]">
+                                    <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
                                         <tr>
-                                            <td colSpan={9} className="p-32 text-center">
-                                                <div className="flex flex-col items-center justify-center opacity-50 gap-6">
-                                                    <div className="w-20 h-20 border-2 border-dashed border-ark-subtext rounded-lg flex items-center justify-center bg-ark-active/5">
-                                                        <Inbox size={40} className="text-ark-subtext" />
-                                                    </div>
-                                                    <span className="text-ark-subtext font-mono tracking-widest text-sm">{t('no_data', lang)}</span>
-                                                </div>
-                                            </td>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_type', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_status', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_device', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_source', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_time', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_result', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_decoy', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_deploy_time', lang)}</th>
+                                            <th className="p-4 font-bold whitespace-nowrap">{t('cp_col_node', lang)}</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody className="divide-y divide-ark-border font-mono text-xs">
+                                        {logs.length > 0 ? (
+                                            logs.map((log) => (
+                                                <tr key={log.id} className="hover:bg-ark-active/5 transition-colors group">
+                                                    <td className="p-4 font-bold text-ark-text">{log.type}</td>
+                                                    <td className="p-4">
+                                                        <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase font-bold ${getStatusStyle(log.status)}`}>
+                                                            {log.status === 'Compromised' ? t('cp_status_compromised', lang) : t('cp_status_untriggered', lang)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-ark-text">{log.device}</td>
+                                                    <td className="p-4 text-ark-subtext">{log.sourceIp}</td>
+                                                    <td className="p-4 text-ark-subtext">{log.time}</td>
+                                                    <td className="p-4 text-ark-text">{log.result}</td>
+                                                    <td className="p-4 text-ark-primary">{log.decoyName}</td>
+                                                    <td className="p-4 text-ark-subtext">{log.deployTime}</td>
+                                                    <td className="p-4 text-ark-text">{log.node}</td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={9} className="p-32 text-center">
+                                                    <div className="flex flex-col items-center justify-center opacity-50 gap-6">
+                                                        <div className="w-20 h-20 border-2 border-dashed border-ark-subtext rounded-lg flex items-center justify-center bg-ark-active/5">
+                                                            <Inbox size={40} className="text-ark-subtext" />
+                                                        </div>
+                                                        <span className="text-ark-subtext font-mono tracking-widest text-sm">{t('no_data', lang)}</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                         
                         {/* Footer / Pagination Placeholder */}
                         <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs text-ark-subtext font-mono">
-                            <span>{t('total_count', lang)} {MOCK_DECOY_LOGS.length}</span>
+                            <span>{t('total_count', lang)} {logs.length}</span>
                             <div className="flex gap-1">
                                 <button className="px-2 py-1 border border-ark-border disabled:opacity-50" disabled>&lt;</button>
                                 <button className="px-2 py-1 border border-ark-border disabled:opacity-50" disabled>&gt;</button>

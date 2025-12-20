@@ -1,9 +1,8 @@
 
-import React, { useState } from 'react';
-import { ArkButton } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { MOCK_VULN_RULES } from '../constants';
 import { Lang } from '../types';
 import { 
     Search, 
@@ -116,10 +115,30 @@ const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ ch
 );
 
 export const VulnSimulation: React.FC = () => {
-    const { lang } = useApp();
+    const { lang, authFetch } = useApp();
     const { notify } = useNotification();
-    const [rules, setRules] = useState(MOCK_VULN_RULES);
+    const [rules, setRules] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [enabled, setEnabled] = useState(true);
+
+    const fetchRules = async () => {
+        setLoading(true);
+        try {
+            const response = await authFetch('/api/v1/vuln-rules');
+            if (response.ok) {
+                const data = await response.json();
+                setRules(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch vuln rules", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRules();
+    }, [authFetch]);
 
     const toggleRuleStatus = (id: string) => {
         setRules(prev => prev.map(r => r.id === id ? { ...r, status: r.status === 'active' ? 'inactive' : 'active' } : r));
@@ -237,69 +256,90 @@ export const VulnSimulation: React.FC = () => {
 
             {/* Table */}
             <div className="flex-1 flex flex-col min-h-[500px] bg-ark-panel border border-ark-border overflow-hidden shadow-sm relative">
-                <div className="overflow-x-auto custom-scrollbar flex-1">
-                     <table className="w-full text-left text-sm min-w-[1400px]">
-                         <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
-                             <tr>
-                                 <th className="p-4 whitespace-nowrap">{t('vs_col_name', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('vs_col_type', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_severity', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_hit', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_time', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap">{t('vs_col_creator', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('vs_col_status', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_mod_time', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap">{t('vs_col_mod_by', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap text-center">{t('vs_col_op', lang)}</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y divide-ark-border font-mono text-xs">
-                             {rules.map((rule) => (
-                                 <tr key={rule.id} className="hover:bg-ark-active/5 transition-colors group">
-                                     <td className="p-4 font-bold text-ark-text">{rule.name}</td>
-                                     <td className="p-4 text-ark-subtext">{rule.type}</td>
-                                     <td className="p-4">{getSeverityBadge(rule.severity)}</td>
-                                     <td className="p-4">
-                                         <span className={`font-bold ${rule.hitCount > 0 ? 'text-ark-primary underline cursor-pointer' : 'text-ark-subtext'}`}>
-                                             {rule.hitCount}
-                                         </span>
-                                     </td>
-                                     <td className="p-4 text-ark-subtext">{rule.lastHitTime}</td>
-                                     <td className="p-4 text-ark-text">{rule.creator}</td>
-                                     <td className="p-4">
-                                         <ToggleSwitch checked={rule.status === 'active'} onChange={() => toggleRuleStatus(rule.id)} />
-                                     </td>
-                                     <td className="p-4 text-ark-subtext">{rule.updateTime}</td>
-                                     <td className="p-4 text-ark-text">{rule.updater}</td>
-                                     <td className="p-4">
-                                         <div className="flex items-center justify-center gap-3">
-                                             <button className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_edit', lang)}>
-                                                 <Edit size={16} />
-                                             </button>
-                                             <button onClick={() => handleDelete(rule.id)} className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('mc_delete', lang)}>
-                                                 <Trash2 size={16} />
-                                             </button>
-                                         </div>
-                                     </td>
-                                 </tr>
-                             ))}
-                         </tbody>
-                     </table>
-                </div>
-
-                {/* Footer Pagination */}
-                <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs font-mono text-ark-subtext">
-                    <span>{t('total_records', lang)} {rules.length}</span>
-                    <div className="flex gap-1">
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronLeft size={12} /></button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-primary bg-ark-primary text-black font-bold">1</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">2</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">3</button>
-                        <span className="mx-1">...</span>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">8</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors"><ChevronRight size={12} /></button>
+                {loading ? (
+                    <div className="flex-1 flex items-center justify-center">
+                        <ArkLoading />
                     </div>
-                </div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto custom-scrollbar flex-1">
+                            <table className="w-full text-left text-sm min-w-[1400px]">
+                                <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
+                                    <tr>
+                                        <th className="p-4 whitespace-nowrap">{t('vs_col_name', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap">{t('vs_col_type', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_severity', lang)} ↕</th>
+                                        <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_hit', lang)} ↕</th>
+                                        <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_time', lang)} ↕</th>
+                                        <th className="p-4 whitespace-nowrap">{t('vs_col_creator', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap">{t('vs_col_status', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('vs_col_mod_time', lang)} ↕</th>
+                                        <th className="p-4 whitespace-nowrap">{t('vs_col_mod_by', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap text-center">{t('vs_col_op', lang)}</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-ark-border font-mono text-xs">
+                                    {rules.length > 0 ? (
+                                        rules.map((rule) => (
+                                            <tr key={rule.id} className="hover:bg-ark-active/5 transition-colors group">
+                                                <td className="p-4 font-bold text-ark-text">{rule.name}</td>
+                                                <td className="p-4 text-ark-subtext">{rule.type}</td>
+                                                <td className="p-4">{getSeverityBadge(rule.severity)}</td>
+                                                <td className="p-4">
+                                                    <span className={`font-bold ${rule.hitCount > 0 ? 'text-ark-primary underline cursor-pointer' : 'text-ark-subtext'}`}>
+                                                        {rule.hitCount}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-ark-subtext">{rule.lastHitTime}</td>
+                                                <td className="p-4 text-ark-text">{rule.creator}</td>
+                                                <td className="p-4">
+                                                    <ToggleSwitch checked={rule.status === 'active'} onChange={() => toggleRuleStatus(rule.id)} />
+                                                </td>
+                                                <td className="p-4 text-ark-subtext">{rule.updateTime}</td>
+                                                <td className="p-4 text-ark-text">{rule.updater}</td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center justify-center gap-3">
+                                                        <button className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_edit', lang)}>
+                                                            <Edit size={16} />
+                                                        </button>
+                                                        <button onClick={() => handleDelete(rule.id)} className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('mc_delete', lang)}>
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={10} className="p-20 text-center">
+                                                <div className="flex flex-col items-center justify-center opacity-50 gap-4">
+                                                    <div className="w-16 h-16 border-2 border-dashed border-ark-subtext rounded-full flex items-center justify-center bg-ark-active/5">
+                                                        <Activity size={32} className="text-ark-subtext" />
+                                                    </div>
+                                                    <span className="text-ark-subtext font-mono tracking-widest text-xs">{t('no_data', lang)}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Footer Pagination */}
+                        <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs font-mono text-ark-subtext">
+                            <span>{t('total_records', lang)} {rules.length}</span>
+                            <div className="flex gap-1">
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronLeft size={12} /></button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-primary bg-ark-primary text-black font-bold">1</button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">2</button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">3</button>
+                                <span className="mx-1">...</span>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">8</button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors"><ChevronRight size={12} /></button>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

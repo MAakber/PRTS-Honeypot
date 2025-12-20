@@ -1,9 +1,8 @@
 
-import React, { useState } from 'react';
-import { ArkButton } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { MOCK_ACCOUNT_CREDENTIALS, MOCK_TOP_USERNAMES, MOCK_TOP_PASSWORDS } from '../constants';
 import { Key, Users, X, FileText, ChevronRight, Share2, Building, ChevronLeft, Lock } from 'lucide-react';
 import { ArkDateRangePicker } from './ArkDateRangePicker';
 import { useNotification } from './NotificationSystem';
@@ -65,10 +64,33 @@ const TopList: React.FC<{ title: string, icon: React.ReactNode, data: { name: st
 );
 
 export const AccountResources: React.FC = () => {
-    const { lang, modules, toggleModule } = useApp();
+    const { lang, modules, toggleModule, authFetch } = useApp();
     const { notify } = useNotification();
     const enabled = modules.infoStealing;
     const [dateRange, setDateRange] = useState({ start: '2025-11-07T00:00', end: '2025-12-06T23:59' });
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<{
+        credentials: any[],
+        topUsernames: any[],
+        topPasswords: any[]
+    }>({ credentials: [], topUsernames: [], topPasswords: [] });
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const response = await authFetch('/api/v1/stats/accounts');
+                if (response.ok) {
+                    const result = await response.json();
+                    setData(result);
+                }
+            } catch (error) {
+                console.error("Failed to fetch account resources", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [authFetch]);
 
     const handleToggle = () => {
         const newState = !enabled;
@@ -195,12 +217,14 @@ export const AccountResources: React.FC = () => {
             <div className="flex flex-col xl:flex-row gap-4 flex-1 min-h-[500px]">
                 {/* Left Side: Top Lists */}
                 <div className="w-full xl:w-1/4 flex flex-col gap-4">
-                    <TopList title={t('ar_top_users', lang)} icon={<Users size={16} />} data={MOCK_TOP_USERNAMES} />
-                    <TopList title={t('ar_top_passwords', lang)} icon={<Lock size={16} />} data={MOCK_TOP_PASSWORDS} />
+                    <TopList title={t('ar_top_users', lang)} icon={<Users size={16} />} data={data.topUsernames} />
+                    <TopList title={t('ar_top_passwords', lang)} icon={<Lock size={16} />} data={data.topPasswords} />
                 </div>
 
                 {/* Right Side: Table */}
-                <div className="flex-1 bg-ark-panel border border-ark-border flex flex-col overflow-hidden">
+                <div className="flex-1 bg-ark-panel border border-ark-border flex flex-col overflow-hidden relative">
+                    {loading && <ArkLoading label="FETCHING_CREDENTIAL_DATA" />}
+                    
                     {/* Toolbar */}
                     <div className="p-2 border-b border-ark-border flex justify-end gap-2 bg-ark-active/5">
                         <ArkButton variant="ghost" size="sm" className="gap-2">
@@ -224,22 +248,33 @@ export const AccountResources: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-ark-border font-mono text-xs">
-                                {MOCK_ACCOUNT_CREDENTIALS.map(item => (
-                                    <tr key={item.id} className="hover:bg-ark-active/5 transition-colors group">
-                                        <td className="p-4 font-bold text-ark-text">{item.username}</td>
-                                        <td className="p-4 text-ark-primary font-mono">{item.password}</td>
-                                        <td className="p-4 text-ark-subtext">{item.service}</td>
-                                        <td className="p-4 text-ark-text font-bold">{item.count}</td>
-                                        <td className="p-4 text-right pr-6 text-ark-subtext group-hover:text-ark-primary transition-colors">{item.ip}</td>
+                                {data.credentials.length === 0 && !loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="p-12 text-center text-ark-subtext opacity-50">
+                                            <div className="flex flex-col items-center gap-2">
+                                                <FileText size={48} />
+                                                <span>{t('no_data', lang)}</span>
+                                            </div>
+                                        </td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    data.credentials.map(item => (
+                                        <tr key={item.id} className="hover:bg-ark-active/5 transition-colors group">
+                                            <td className="p-4 font-bold text-ark-text">{item.username}</td>
+                                            <td className="p-4 text-ark-primary font-mono">{item.password}</td>
+                                            <td className="p-4 text-ark-subtext">{item.service}</td>
+                                            <td className="p-4 text-ark-text font-bold">{item.count}</td>
+                                            <td className="p-4 text-right pr-6 text-ark-subtext group-hover:text-ark-primary transition-colors">{item.ip}</td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
 
                     {/* Footer Pagination */}
                     <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs font-mono text-ark-subtext">
-                        <span>{t('total_records', lang)} {MOCK_ACCOUNT_CREDENTIALS.length}</span>
+                        <span>{t('total_records', lang)} {data.credentials.length}</span>
                         <div className="flex gap-1">
                             <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronLeft size={12} /></button>
                             <button className="w-6 h-6 flex items-center justify-center border border-ark-primary bg-ark-primary text-black font-bold">1</button>

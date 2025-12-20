@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
-import { ArkButton } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { MOCK_ATTACK_SOURCES } from '../constants';
-import { Users, X, AlertTriangle, Radar, Trash2, User, ChevronLeft, ChevronRight, Target, Search, Shield } from 'lucide-react';
+import { Users, X, AlertTriangle, Radar, Trash2, User, ChevronLeft, ChevronRight, Target, Search, Shield, Globe } from 'lucide-react';
 import { ArkDateRangePicker } from './ArkDateRangePicker';
 import { useNotification } from './NotificationSystem';
+import { HackerProfile, AccountCredential } from '../types';
 
 const FilterInput: React.FC<{ label?: string, placeholder?: string, width?: string, children?: React.ReactNode }> = ({ label, placeholder, width = "w-full", children }) => (
     <div className={`flex items-center border border-ark-border bg-ark-panel h-[32px] ${width}`}>
@@ -43,10 +43,46 @@ const SourceTracingVisual = () => {
 };
 
 export const AttackSource: React.FC = () => {
-    const { lang, modules, toggleModule } = useApp();
+    const { lang, modules, toggleModule, authFetch } = useApp();
     const { notify } = useNotification();
     const enabled = modules.attackSource;
     const [dateRange, setDateRange] = useState({ start: '2025-11-20T00:00', end: '2025-12-06T23:59' });
+    const [sources, setSources] = useState<HackerProfile[]>([]);
+    const [credentials, setCredentials] = useState<AccountCredential[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [sourcesRes, credsRes] = await Promise.all([
+                authFetch('/api/v1/attack-sources'),
+                authFetch('/api/v1/account-credentials')
+            ]);
+            
+            if (sourcesRes.ok) {
+                const data = await sourcesRes.json();
+                // Map backend string nodes/tags to arrays
+                setSources(data.map((s: any) => ({
+                    ...s,
+                    nodes: typeof s.nodes === 'string' ? s.nodes.split(',') : s.nodes,
+                    tags: typeof s.tags === 'string' ? s.tags.split(',') : s.tags
+                })));
+            }
+
+            if (credsRes.ok) {
+                const data = await credsRes.json();
+                setCredentials(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch attack source data", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     const handleToggle = () => {
         const newState = !enabled;
@@ -107,79 +143,115 @@ export const AttackSource: React.FC = () => {
 
             {/* Table */}
             <div className="flex-1 flex flex-col min-h-[500px] bg-ark-panel border border-ark-border overflow-hidden shadow-sm relative">
-                <div className="overflow-x-auto custom-scrollbar flex-1">
-                     <table className="w-full text-left text-sm min-w-[1400px]">
-                         <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
-                             <tr>
-                                 <th className="p-4 whitespace-nowrap">{t('col_attack_ip', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('col_threat_verdict', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('col_micro_intel', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('col_behavior_detect', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('col_attack_total', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('col_scan_total', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap">{t('col_attacked_nodes', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('col_first_record', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap text-center">{t('col_operation', lang)}</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y divide-ark-border font-mono text-xs">
-                             {MOCK_ATTACK_SOURCES.map((item) => (
-                                 <tr key={item.id} className="hover:bg-ark-active/5 transition-colors group">
-                                     <td className="p-4">
-                                         <div className="flex items-center gap-2">
-                                             <span className="font-bold text-ark-text">{item.ip}</span>
-                                             <span className="text-[10px] bg-ark-subtext/20 text-ark-subtext px-1 rounded-sm border border-ark-border">{item.country}</span>
-                                         </div>
-                                     </td>
-                                     <td className="p-4">
-                                         <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase font-bold ${
-                                             item.verdict === 'high' ? 'border-red-500/50 text-red-500 bg-red-500/10' :
-                                             item.verdict === 'medium' ? 'border-orange-500/50 text-orange-500 bg-orange-500/10' :
-                                             'border-ark-subtext/50 text-ark-subtext bg-ark-subtext/10'
-                                         }`}>
-                                             {item.verdict === 'high' ? t('val_high', lang) : item.verdict === 'medium' ? t('val_medium', lang) : t('val_unknown', lang)}
-                                         </span>
-                                     </td>
-                                     <td className="p-4">
-                                         <div className="flex gap-1">
-                                             {item.tags?.map((tag, i) => (
-                                                 <span key={i} className="px-1 py-0.5 bg-ark-active/10 text-ark-primary text-[10px] rounded-sm border border-ark-primary/20">
-                                                     {tag === 'scan' ? t('btn_scan', lang) : tag === 'trash_mail' ? t('btn_trash', lang) : tag === 'dynamic_ip' ? t('btn_dynamic', lang) : tag}
-                                                 </span>
-                                             )) || <span className="text-ark-subtext">-</span>}
-                                         </div>
-                                     </td>
-                                     <td className="p-4 text-ark-subtext">-</td>
-                                     <td className="p-4 text-ark-text font-bold">{item.attackCount}</td>
-                                     <td className="p-4 text-ark-text font-bold">{item.scanCount}</td>
-                                     <td className="p-4 text-ark-subtext">
-                                         {item.nodes.map(n => n === 'Internal Node' ? t('val_builtin_node', lang) : n).join(', ')}
-                                     </td>
-                                     <td className="p-4 text-ark-subtext">{item.firstTime}</td>
-                                     <td className="p-4">
-                                         <div className="flex items-center justify-center gap-3">
-                                             <button className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_analyze', lang)}>
-                                                 <Shield size={16} />
-                                             </button>
-                                             <button className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('btn_block', lang)}>
-                                                 <AlertTriangle size={16} />
-                                             </button>
-                                         </div>
-                                     </td>
-                                 </tr>
-                             ))}
-                         </tbody>
-                     </table>
-                </div>
+                {loading ? (
+                    <ArkLoading label="FETCHING_SOURCE_DATA" />
+                ) : (
+                    <div className="overflow-x-auto custom-scrollbar flex-1">
+                        <table className="w-full text-left text-sm min-w-[1400px]">
+                            <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
+                                <tr>
+                                    <th className="p-4 whitespace-nowrap">{t('col_attack_ip', lang)}</th>
+                                    <th className="p-4 whitespace-nowrap">{t('col_threat_verdict', lang)}</th>
+                                    <th className="p-4 whitespace-nowrap">{t('col_micro_intel', lang)}</th>
+                                    <th className="p-4 whitespace-nowrap">{t('col_behavior_detect', lang)}</th>
+                                    <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('col_attack_total', lang)} ↕</th>
+                                    <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('col_scan_total', lang)} ↕</th>
+                                    <th className="p-4 whitespace-nowrap">{t('col_attacked_nodes', lang)}</th>
+                                    <th className="p-4 whitespace-nowrap">{t('col_first_record', lang)}</th>
+                                    <th className="p-4 whitespace-nowrap text-center">{t('col_operation', lang)}</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-ark-border font-mono text-xs">
+                                {sources.map((item) => (
+                                    <tr key={item.id} className="hover:bg-ark-active/5 transition-colors group">
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-ark-text">{item.ip}</span>
+                                                <span className="text-[10px] bg-ark-subtext/20 text-ark-subtext px-1 rounded-sm border border-ark-border">{item.country}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase font-bold ${
+                                                item.verdict === 'high' ? 'border-red-500/50 text-red-500 bg-red-500/10' :
+                                                item.verdict === 'medium' ? 'border-orange-500/50 text-orange-500 bg-orange-500/10' :
+                                                'border-ark-subtext/50 text-ark-subtext bg-ark-subtext/10'
+                                            }`}>
+                                                {item.verdict === 'high' ? t('val_high', lang) : item.verdict === 'medium' ? t('val_medium', lang) : t('val_unknown', lang)}
+                                            </span>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex gap-1">
+                                                {item.tags?.map((tag, i) => (
+                                                    <span key={i} className="px-1 py-0.5 bg-ark-active/10 text-ark-primary text-[10px] rounded-sm border border-ark-primary/20">
+                                                        {tag === 'scan' ? t('btn_scan', lang) : tag === 'trash_mail' ? t('btn_trash', lang) : tag === 'dynamic_ip' ? t('btn_dynamic', lang) : tag}
+                                                    </span>
+                                                )) || <span className="text-ark-subtext">-</span>}
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-ark-subtext">-</td>
+                                        <td className="p-4 text-ark-text font-bold">{item.attackCount}</td>
+                                        <td className="p-4 text-ark-text font-bold">{item.scanCount}</td>
+                                        <td className="p-4 text-ark-subtext">
+                                            {item.nodes?.map(n => n === 'Internal Node' ? t('val_builtin_node', lang) : n).join(', ')}
+                                        </td>
+                                        <td className="p-4 text-ark-subtext">{item.firstTime}</td>
+                                        <td className="p-4">
+                                            <div className="flex items-center justify-center gap-3">
+                                                <button className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_analyze', lang)}>
+                                                    <Shield size={16} />
+                                                </button>
+                                                <button className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('btn_block', lang)}>
+                                                    <AlertTriangle size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs font-mono text-ark-subtext">
-                    <span>{t('total_records', lang)} {MOCK_ATTACK_SOURCES.length}</span>
+                    <span>{t('total_records', lang)} {sources.length}</span>
                     <div className="flex gap-1">
                         <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronLeft size={12} /></button>
                         <button className="w-6 h-6 flex items-center justify-center border border-ark-primary bg-ark-primary text-black font-bold">1</button>
                         <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronRight size={12} /></button>
                     </div>
+                </div>
+            </div>
+
+            {/* Account Credentials Section */}
+            <div className="bg-ark-panel border border-ark-border p-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                    <Shield size={18} className="text-ark-primary" />
+                    <h3 className="font-bold text-ark-text uppercase tracking-wider">{t('as_credentials', lang)}</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    {credentials.map((cred) => (
+                        <div key={cred.id} className="border border-ark-border p-3 bg-ark-bg/30 hover:border-ark-primary/50 transition-colors group">
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-[10px] font-mono text-ark-subtext">{cred.service}</span>
+                                <span className="text-[10px] font-mono text-ark-primary">x{cred.count}</span>
+                            </div>
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <User size={12} className="text-ark-subtext" />
+                                    <span className="text-xs font-bold text-ark-text">{cred.username}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Shield size={12} className="text-ark-subtext" />
+                                    <span className="text-xs font-mono text-ark-subtext">{cred.password}</span>
+                                </div>
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-ark-border/50 flex items-center gap-1">
+                                <Globe size={10} className="text-ark-subtext" />
+                                <span className="text-[9px] text-ark-subtext">{cred.ip}</span>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>

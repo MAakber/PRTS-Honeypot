@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ArkPageHeader, ArkButton, ArkInput } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
 import { ShieldCheck, Plus, RefreshCw, Trash2, Lock, Unlock, Server, Shield, Monitor, Globe, X, Save, Clock, AlertTriangle, Network } from 'lucide-react';
-import { MOCK_ACCESS_RULES, MOCK_NODES } from '../constants';
 import { useNotification } from './NotificationSystem';
 import { AccessControlRule } from '../types';
+import { authFetch } from '../services/aiService';
 
 // 复用自律防御的切换开关组件
 const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ checked, onChange }) => (
@@ -21,9 +21,37 @@ const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ ch
 export const AccessControl: React.FC = () => {
     const { lang } = useApp();
     const { notify } = useNotification();
-    const [rules, setRules] = useState(MOCK_ACCESS_RULES);
+    const [rules, setRules] = useState<AccessControlRule[]>([]);
+    const [nodes, setNodes] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'blacklist' | 'whitelist'>('blacklist');
     const [isSyncing, setIsSyncing] = useState(false);
+    const [nodeStates, setNodeStates] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const fetchData = async () => {
+        try {
+            const [rulesData, nodesData] = await Promise.all([
+                authFetch('/api/v1/access-rules'),
+                authFetch('/api/v1/nodes')
+            ]);
+            
+            if (rulesData) setRules(rulesData);
+            if (nodesData) {
+                setNodes(nodesData);
+                setNodeStates(
+                    nodesData.reduce((acc: any, node: any) => ({ ...acc, [node.id]: node.status === 'online' }), {})
+                );
+            }
+        } catch (error) {
+            console.error('Failed to fetch access control data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
     
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -36,11 +64,6 @@ export const AccessControl: React.FC = () => {
     const [formReason, setFormReason] = useState('');
     const [formDuration, setFormDuration] = useState('permanent');
     
-    // 模拟节点防火墙状态控制
-    const [nodeStates, setNodeStates] = useState<Record<string, boolean>>(
-        MOCK_NODES.reduce((acc, node) => ({ ...acc, [node.id]: node.status === 'online' }), {})
-    );
-
     const filteredRules = rules.filter(r => r.type === activeTab);
 
     const handleSync = () => {
@@ -157,15 +180,16 @@ export const AccessControl: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col h-full bg-ark-bg border border-ark-border overflow-hidden">
-            <ArkPageHeader 
-                icon={<ShieldCheck size={24} />} 
-                title={t('ad_access_title', lang)} 
-                subtitle={t('ac_subtitle', lang)}
-            />
+        <>
+            <div className="flex flex-col h-full bg-ark-bg border border-ark-border overflow-hidden">
+                <ArkPageHeader 
+                    icon={<ShieldCheck size={24} />} 
+                    title={t('ad_access_title', lang)} 
+                    subtitle={t('ac_subtitle', lang)}
+                />
 
-            <div className="p-4 md:p-8 flex-1 overflow-y-auto custom-scrollbar">
-                <div className="max-w-6xl mx-auto space-y-6">
+                <div className="p-4 md:p-8 flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="max-w-6xl mx-auto space-y-6">
                     {/* Top Dashboard: Global & Sync Status */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-ark-panel border border-ark-border p-4 flex items-center justify-between">
@@ -200,7 +224,7 @@ export const AccessControl: React.FC = () => {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <span className="text-2xl font-bold font-mono text-ark-text">{MOCK_NODES.filter(n => n.status === 'online').length}/{MOCK_NODES.length}</span>
+                                <span className="text-2xl font-bold font-mono text-ark-text">{nodes.filter(n => n.status === 'online').length}/{nodes.length}</span>
                                 <p className="text-xs text-ark-subtext uppercase">{t('ac_total_nodes', lang)}</p>
                             </div>
                         </div>
@@ -213,7 +237,7 @@ export const AccessControl: React.FC = () => {
                             {t('ac_node_firewall_matrix', lang)}
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {MOCK_NODES.map(node => (
+                            {nodes.map(node => (
                                 <div key={node.id} className="bg-ark-panel border border-ark-border p-3 flex flex-col gap-2 hover:border-ark-primary/50 transition-colors">
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-2">
@@ -228,7 +252,7 @@ export const AccessControl: React.FC = () => {
                                     <div className="text-xs font-mono text-ark-subtext truncate">{node.ip}</div>
                                     <div className="mt-auto pt-2 border-t border-black/10 dark:border-white/10 flex justify-between items-center">
                                         <span className="text-[10px] font-mono text-ark-subtext uppercase">{getFirewallName(node.os)}</span>
-                                        <span className={`text-[10px] font-bold ${nodeStates[node.id] ? 'text-green-500' : 'text-red-500'}`}>
+                                        <span className={"text-[10px] font-bold " + (nodeStates[node.id] ? 'text-green-500' : 'text-red-500')}>
                                             {nodeStates[node.id] ? t('ac_status_active', lang) : t('ac_status_error', lang)}
                                         </span>
                                     </div>
@@ -267,8 +291,13 @@ export const AccessControl: React.FC = () => {
 
                     {/* Table */}
                     <div className="bg-ark-panel border border-ark-border overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
+                        {loading ? (
+                            <div className="p-12 flex items-center justify-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ark-primary"></div>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase border-b border-ark-border">
                                     <tr>
                                         <th className="p-4">{t('ac_col_ip', lang)}</th>
@@ -315,71 +344,70 @@ export const AccessControl: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
+        </div>
+    </div>
 
-            {/* Add Rule Modal */}
-            {isModalOpen && createPortal(
-                <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={closeAddModal} />
-                    
-                    <div className={`
-                        w-full max-w-md bg-ark-panel border border-[#23ade5] shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative flex flex-col
-                        ${isClosing ? 'animate-ark-modal-out' : 'animate-ark-modal-in'}
-                    `}>
-                        {/* Corners */}
-                        <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#23ade5]" />
-                        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-[#23ade5]" />
+        {/* Add Rule Modal */}
+        {isModalOpen && createPortal(
+            <div className={"fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200 " + (isClosing ? 'opacity-0' : 'opacity-100')}>
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeAddModal} />
+                
+                <div className={"w-full max-w-md bg-ark-panel border border-[#23ade5] shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative flex flex-col " + (isClosing ? 'animate-ark-modal-out' : 'animate-ark-modal-in')}>
+                    {/* Corners */}
+                    <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#23ade5]" />
+                    <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-[#23ade5]" />
 
-                        <div className="flex justify-between items-center p-4 border-b border-ark-border">
-                            <h3 className="text-sm font-bold text-ark-text uppercase tracking-[0.2em] flex items-center gap-2">
-                                <Plus size={18} className="text-[#23ade5]" /> 
-                                {t('ac_add_rule', lang)}
-                            </h3>
-                            <button onClick={closeAddModal} className="text-ark-subtext hover:text-ark-text transition-colors">
-                                <X size={20} />
-                            </button>
+                    <div className="flex justify-between items-center p-4 border-b border-ark-border">
+                        <h3 className="text-sm font-bold text-ark-text uppercase tracking-[0.2em] flex items-center gap-2">
+                            <Plus size={18} className="text-[#23ade5]" /> 
+                            {t('ac_add_rule', lang)}
+                        </h3>
+                        <button onClick={closeAddModal} className="text-ark-subtext hover:text-ark-text transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div className="p-6 space-y-5">
+                        {/* Target Type Selector */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-ark-subtext uppercase tracking-widest">{t('ac_target_type', lang)}</label>
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => setFormTargetType('ip')}
+                                    className={`flex-1 py-2 text-xs font-bold border flex items-center justify-center gap-2 transition-colors ${formTargetType === 'ip' ? 'bg-ark-primary/10 text-ark-primary border-ark-primary' : 'border-ark-border text-ark-subtext hover:border-ark-primary/50'}`}
+                                >
+                                    <Monitor size={14} /> {t('ac_type_ip', lang)}
+                                </button>
+                                <button 
+                                    onClick={() => setFormTargetType('cidr')}
+                                    className={`flex-1 py-2 text-xs font-bold border flex items-center justify-center gap-2 transition-colors ${formTargetType === 'cidr' ? 'bg-ark-primary/10 text-ark-primary border-ark-primary' : 'border-ark-border text-ark-subtext hover:border-ark-primary/50'}`}
+                                >
+                                    <Network size={14} /> {t('ac_type_cidr', lang)}
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="p-6 space-y-5">
-                            {/* Target Type Selector */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-ark-subtext uppercase tracking-widest">{t('ac_target_type', lang)}</label>
-                                <div className="flex gap-4">
-                                    <button 
-                                        onClick={() => setFormTargetType('ip')}
-                                        className={`flex-1 py-2 text-xs font-bold border flex items-center justify-center gap-2 transition-colors ${formTargetType === 'ip' ? 'bg-ark-primary/10 text-ark-primary border-ark-primary' : 'border-ark-border text-ark-subtext hover:border-ark-primary/50'}`}
-                                    >
-                                        <Monitor size={14} /> {t('ac_type_ip', lang)}
-                                    </button>
-                                    <button 
-                                        onClick={() => setFormTargetType('cidr')}
-                                        className={`flex-1 py-2 text-xs font-bold border flex items-center justify-center gap-2 transition-colors ${formTargetType === 'cidr' ? 'bg-ark-primary/10 text-ark-primary border-ark-primary' : 'border-ark-border text-ark-subtext hover:border-ark-primary/50'}`}
-                                    >
-                                        <Network size={14} /> {t('ac_type_cidr', lang)}
-                                    </button>
-                                </div>
-                            </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-ark-subtext uppercase tracking-widest">{t('ac_col_ip', lang)}</label>
+                            <ArkInput 
+                                value={formIp} 
+                                onChange={e => setFormIp(e.target.value)} 
+                                placeholder={formTargetType === 'ip' ? "192.168.1.100" : "10.0.0.0/24"}
+                                autoFocus
+                            />
+                        </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-ark-subtext uppercase tracking-widest">{t('ac_col_ip', lang)}</label>
-                                <ArkInput 
-                                    value={formIp} 
-                                    onChange={e => setFormIp(e.target.value)} 
-                                    placeholder={formTargetType === 'ip' ? "192.168.1.100" : "10.0.0.0/24"}
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-ark-subtext uppercase tracking-widest">Rule Type</label>
-                                <div className="flex gap-4">
-                                    <button 
-                                        onClick={() => setFormType('blacklist')}
-                                        className={`flex-1 py-2 text-xs font-bold border ${formType === 'blacklist' ? 'bg-ark-danger/10 text-ark-danger border-ark-danger' : 'border-ark-border text-ark-subtext'}`}
-                                    >
-                                        {t('ac_blacklist', lang)}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-ark-subtext uppercase tracking-widest">Rule Type</label>
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => setFormType('blacklist')}
+                                    className={`flex-1 py-2 text-xs font-bold border ${formType === 'blacklist' ? 'bg-ark-danger/10 text-ark-danger border-ark-danger' : 'border-ark-border text-ark-subtext'}`}
+                                >
+                                    {t('ac_blacklist', lang)}
                                     </button>
                                     <button 
                                         onClick={() => setFormType('whitelist')}
@@ -427,8 +455,8 @@ export const AccessControl: React.FC = () => {
                         </div>
                     </div>
                 </div>,
-                document.body
-            )}
-        </div>
-    );
+            document.body
+        )}
+    </>
+);
 };

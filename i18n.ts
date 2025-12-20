@@ -72,6 +72,11 @@ const resources: Record<Lang, Record<string, string>> = {
     // Common
     op_success: "Success",
     op_failed: "Failed",
+    err_network: "Network communication failed.",
+    err_incorrect_old_pwd: "Incorrect old password",
+    err_account_locked: "Account locked due to too many failed attempts.",
+    err_ip_whitelist: "Access denied: IP not in whitelist.",
+    err_session_expired: "Session expired, please login again.",
     op_item_deleted: "Item deleted.",
     filter_reset: "Reset",
     filter_placeholder_search: "Search...",
@@ -80,6 +85,8 @@ const resources: Record<Lang, Record<string, string>> = {
     btn_confirm: "Confirm",
     btn_syncing: "Syncing...",
     btn_edit: "Edit",
+    loading: "Loading",
+    status_normal: "Normal",
     
     // Access Control
     ad_access_title: "Access Control",
@@ -131,6 +138,7 @@ const resources: Record<Lang, Record<string, string>> = {
     status_active_upper: "ACTIVE",
     status_success: "Success",
     status_failure: "Failure",
+    status_generating: "Generating",
     op_strategy_updated: "Strategy updated.",
     op_strategy_added: "Strategy added.",
     op_strategy_deleted: "Strategy deleted.",
@@ -534,6 +542,8 @@ const resources: Record<Lang, Record<string, string>> = {
     rm_col_creator: "Creator",
     rm_col_time: "Time",
     rm_col_op: "Operation",
+    rm_op_view: "View",
+    rm_op_download: "Download",
     rm_no_data: "No Reports Found",
 
     // Config
@@ -563,10 +573,10 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_launch_terminal: "Launch Terminal",
     sc_redoc_desc: "Alternative API documentation.",
     sc_view_docs: "View Docs",
-    sc_ai_title: "AI Analysis (Gemini)",
+    sc_ai_title: "AI Analysis",
     sc_ai_subtitle: "Configure AI for threat analysis.",
     sc_ai_enable: "Enable AI",
-    sc_ai_desc: "Use Gemini AI for threat analysis.",
+    sc_ai_desc: "Use AI for threat analysis.",
     sc_ai_provider: "Provider",
     sc_ai_model: "Model",
     sc_ai_apikey: "API Key",
@@ -615,6 +625,7 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_db_backup: "Backup Now",
     sc_login_account_title: "Account Settings",
     sc_login_current_user: "Current User",
+    sc_login_old_pwd: "Old Password",
     sc_login_new_pwd: "New Password",
     sc_login_confirm_pwd: "Confirm Password",
     sc_login_update_btn: "Update Credentials",
@@ -637,6 +648,11 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_user_status_active: "Active",
     sc_user_modal_title: "Create User",
     sc_login_logs_title: "Login Logs",
+    sc_security_hardening: "Security Hardening",
+    sc_hardening_admin_title: "Default Admin Account",
+    sc_hardening_admin_desc: "The default 'admin' account is a known target. For better security, create a custom administrator account and remove the default 'admin' account.",
+    sc_hardening_btn: "Purge Default Admin",
+    sc_hardening_no_admin: "Default admin account not found.",
     sc_login_log_time: "Time",
     sc_login_log_ip: "IP",
     sc_login_log_device: "Device",
@@ -653,6 +669,10 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_ntp_interval: "Interval (Min)",
     sc_ntp_sync_now: "Sync Now",
     sc_ntp_status: "Status",
+    sc_ntp_state_synced: "SYNCHRONIZED",
+    sc_ntp_state_syncing: "SYNCING",
+    sc_ntp_state_error: "ERROR",
+    sc_ntp_state_unknown: "UNKNOWN",
     sc_ntp_offset: "Offset",
     sc_trace_title: "Tracing",
     sc_trace_subtitle: "IP Tracing and Visualization.",
@@ -709,6 +729,12 @@ const resources: Record<Lang, Record<string, string>> = {
     drp_cancel: "Cancel",
     drp_confirm: "Apply",
     filter_placeholder_tags: "Tags...",
+
+    // Messages
+    msg_node_online_title: "Node Online Notification",
+    msg_node_online_content: "Probe node [{name}] ({id}) has successfully connected to the Neural Hub.",
+    msg_node_offline_title: "Node Offline Warning",
+    msg_node_offline_content: "Warning: Probe node [{name}] ({id}) has disconnected from the Neural Hub.",
   },
   zh: {
     // Defense Level
@@ -780,6 +806,11 @@ const resources: Record<Lang, Record<string, string>> = {
     // Common
     op_success: "成功",
     op_failed: "失败",
+    err_network: "网络通信失败。",
+    err_incorrect_old_pwd: "旧密码错误",
+    err_account_locked: "由于多次尝试失败，账号已锁定。",
+    err_ip_whitelist: "访问拒绝：IP 不在白名单中。",
+    err_session_expired: "会话已过期，请重新登录。",
     op_item_deleted: "项目已删除。",
     filter_reset: "重置",
     filter_placeholder_search: "搜索...",
@@ -788,6 +819,8 @@ const resources: Record<Lang, Record<string, string>> = {
     btn_confirm: "确认",
     btn_syncing: "同步中...",
     btn_edit: "编辑",
+    loading: "加载中",
+    status_normal: "正常",
     
     // Access Control
     ad_access_title: "访问控制",
@@ -839,6 +872,7 @@ const resources: Record<Lang, Record<string, string>> = {
     status_active_upper: "活跃",
     status_success: "成功",
     status_failure: "失败",
+    status_generating: "生成中",
     op_strategy_updated: "策略已更新。",
     op_strategy_added: "策略已添加。",
     op_strategy_deleted: "策略已删除。",
@@ -1242,6 +1276,8 @@ const resources: Record<Lang, Record<string, string>> = {
     rm_col_creator: "创建者",
     rm_col_time: "时间",
     rm_col_op: "操作",
+    rm_op_view: "查看",
+    rm_op_download: "下载",
     rm_no_data: "未发现报表",
 
     // Config
@@ -1271,10 +1307,10 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_launch_terminal: "启动终端",
     sc_redoc_desc: "替代 API 文档。",
     sc_view_docs: "查看文档",
-    sc_ai_title: "AI 分析 (Gemini)",
+    sc_ai_title: "AI 分析",
     sc_ai_subtitle: "配置 AI 以进行威胁分析。",
     sc_ai_enable: "启用 AI",
-    sc_ai_desc: "使用 Gemini AI 进行威胁分析。",
+    sc_ai_desc: "使用 AI 进行威胁分析。",
     sc_ai_provider: "提供商",
     sc_ai_model: "模型",
     sc_ai_apikey: "API 密钥",
@@ -1323,6 +1359,7 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_db_backup: "立即备份",
     sc_login_account_title: "账号设置",
     sc_login_current_user: "当前用户",
+    sc_login_old_pwd: "旧密码",
     sc_login_new_pwd: "新密码",
     sc_login_confirm_pwd: "确认密码",
     sc_login_update_btn: "更新凭证",
@@ -1345,6 +1382,11 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_user_status_active: "正常",
     sc_user_modal_title: "创建用户",
     sc_login_logs_title: "登录日志",
+    sc_security_hardening: "安全加固",
+    sc_hardening_admin_title: "默认管理员账号",
+    sc_hardening_admin_desc: "默认的 'admin' 账号是已知的攻击目标。为了提高安全性，请创建一个自定义管理员账号并移除默认的 'admin' 账号。",
+    sc_hardening_btn: "清除默认 Admin",
+    sc_hardening_no_admin: "未找到默认 admin 账号。",
     sc_login_log_time: "时间",
     sc_login_log_ip: "IP",
     sc_login_log_device: "设备",
@@ -1361,6 +1403,10 @@ const resources: Record<Lang, Record<string, string>> = {
     sc_ntp_interval: "间隔 (分钟)",
     sc_ntp_sync_now: "立即同步",
     sc_ntp_status: "状态",
+    sc_ntp_state_synced: "已同步",
+    sc_ntp_state_syncing: "同步中",
+    sc_ntp_state_error: "错误",
+    sc_ntp_state_unknown: "未知",
     sc_ntp_offset: "偏移量",
     sc_trace_title: "溯源",
     sc_trace_subtitle: "IP 溯源与可视化。",
@@ -1417,9 +1463,21 @@ const resources: Record<Lang, Record<string, string>> = {
     drp_cancel: "取消",
     drp_confirm: "应用",
     filter_placeholder_tags: "标签...",
+
+    // 消息通知
+    msg_node_online_title: "节点上线通知",
+    msg_node_online_content: "探针节点 [{name}] ({id}) 已成功连接至神经枢纽。",
+    msg_node_offline_title: "节点掉线警告",
+    msg_node_offline_content: "警告：探针节点 [{name}] ({id}) 与神经枢纽的连接已断开。",
   }
 };
 
-export const t = (key: string, lang: Lang): string => {
-  return resources[lang]?.[key] || key;
+export const t = (key: string, lang: Lang, params?: Record<string, string | number>): string => {
+  let text = resources[lang]?.[key] || key;
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      text = text.replace(`{${k}}`, String(v));
+    });
+  }
+  return text;
 };

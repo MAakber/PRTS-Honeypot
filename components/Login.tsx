@@ -343,11 +343,20 @@ const PuzzleCaptcha: React.FC<{ onVerify: (success: boolean) => void, isVerified
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const { lang, toggleLang, darkMode, toggleTheme, unreadCount } = useApp();
   const { notify } = useNotification();
-  const [username, setUsername] = useState('Dr. Admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
   const [error, setError] = useState('');
   const [clientIp, setClientIp] = useState('SCANNING...');
+  
+  useEffect(() => {
+    const expired = localStorage.getItem('prts_session_expired');
+    if (expired) {
+      localStorage.removeItem('prts_session_expired');
+      notify('error', t('notify_login_failed_title', lang), t('err_session_expired', lang) || 'Session expired, please login again.');
+      setError(t('err_session_expired', lang) || 'Session expired, please login again.');
+    }
+  }, []);
   
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -368,9 +377,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
 
     if (username && password) {
-      const success = await (onLogin as any)(username, password);
-      
-      if (success) {
+      try {
+        await (onLogin as any)(username, password);
         notify('success', t('notify_login_success_title', lang), t('notify_login_success_msg', lang));
         
         if (unreadCount > 0) {
@@ -378,15 +386,21 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 notify('warning', t('mc_title', lang), t('unread_alert', lang).replace('{count}', unreadCount.toString()));
             }, 800);
         }
-      } else {
-        const msg = t('access_denied', lang);
-        setError(msg);
-        notify('error', t('notify_login_failed_title', lang), msg);
+      } catch (err: any) {
+        const errMsg = err.message;
+        let displayMsg = t('access_denied', lang);
+        
+        if (errMsg === 'Account locked') {
+          displayMsg = t('err_account_locked', lang) || 'Account locked due to too many attempts';
+        } else if (errMsg === 'IP not in whitelist') {
+          displayMsg = t('err_ip_whitelist', lang) || 'Access denied: IP not in whitelist';
+        } else if (errMsg !== 'Authentication failed') {
+          displayMsg = errMsg;
+        }
+        
+        setError(displayMsg);
+        notify('error', t('notify_login_failed_title', lang), displayMsg);
       }
-    } else {
-      const msg = t('access_denied', lang);
-      setError(msg);
-      notify('error', t('notify_login_failed_title', lang), msg);
     }
   };
 

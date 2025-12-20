@@ -1,13 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ArkPageHeader, ArkButton, ArkInput } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
 import { Filter, Search, Plus, Trash2, X, Save, Regex, ChevronRight } from 'lucide-react';
-import { MOCK_TRAFFIC_RULES } from '../constants';
 import { useNotification } from './NotificationSystem';
 import { TrafficRule } from '../types';
+import { authFetch } from '../services/aiService';
 
 const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ checked, onChange }) => (
     <div 
@@ -21,8 +21,24 @@ const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ ch
 export const TrafficFiltration: React.FC = () => {
     const { lang } = useApp();
     const { notify } = useNotification();
-    const [rules, setRules] = useState(MOCK_TRAFFIC_RULES);
+    const [rules, setRules] = useState<TrafficRule[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeCategoryKey, setActiveCategoryKey] = useState('tf_cat_all');
+
+    useEffect(() => {
+        fetchRules();
+    }, []);
+
+    const fetchRules = async () => {
+        try {
+            const data = await authFetch('/api/v1/traffic-rules');
+            if (data) setRules(data);
+        } catch (error) {
+            console.error('Failed to fetch traffic rules:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,14 +105,15 @@ export const TrafficFiltration: React.FC = () => {
     const filteredRules = activeCategoryValue === 'All' ? rules : rules.filter(r => r.category === activeCategoryValue);
 
     return (
-        <div className="flex flex-col h-full bg-ark-bg border border-ark-border overflow-hidden">
-            <ArkPageHeader 
-                icon={<Filter size={24} />} 
-                title={t('ad_filter_title', lang)} 
-                subtitle={t('tf_subtitle', lang)}
-            />
+        <>
+            <div className="flex flex-col h-full bg-ark-bg border border-ark-border overflow-hidden">
+                <ArkPageHeader 
+                    icon={<Filter size={24} />} 
+                    title={t('ad_filter_title', lang)} 
+                    subtitle={t('tf_subtitle', lang)}
+                />
 
-            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
                 {/* Sidebar Categories */}
                 <div className="w-full md:w-64 bg-ark-panel border-b md:border-b-0 md:border-r border-ark-border p-4 flex flex-row md:flex-col gap-2 overflow-x-auto shrink-0">
                     {categories.map(cat => (
@@ -119,7 +136,11 @@ export const TrafficFiltration: React.FC = () => {
                             </ArkButton>
                         </div>
 
-                        {filteredRules.length > 0 ? (
+                        {loading ? (
+                            <div className="flex-1 flex items-center justify-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ark-primary"></div>
+                            </div>
+                        ) : filteredRules.length > 0 ? (
                             filteredRules.map(rule => (
                                 <div key={rule.id} className="bg-ark-panel border border-ark-border p-4 flex items-center justify-between hover:border-ark-primary/50 transition-colors shrink-0">
                                     <div className="flex-1">
@@ -157,16 +178,15 @@ export const TrafficFiltration: React.FC = () => {
                     </div>
                 </div>
             </div>
+        </div>
 
-            {/* Add Rule Modal */}
-            {isModalOpen && createPortal(
-                <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={closeAddModal} />
+        {/* Add Rule Modal */}
+        {isModalOpen && createPortal(
+            <>
+                <div className={"fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200 " + (isClosing ? 'opacity-0' : 'opacity-100')}>
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeAddModal} />
                     
-                    <div className={`
-                        w-full max-w-md bg-ark-panel border border-[#23ade5] shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative flex flex-col
-                        ${isClosing ? 'animate-ark-modal-out' : 'animate-ark-modal-in'}
-                    `}>
+                    <div className={"w-full max-w-md bg-ark-panel border border-[#23ade5] shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative flex flex-col " + (isClosing ? 'animate-ark-modal-out' : 'animate-ark-modal-in')}>
                         {/* Corners */}
                         <div className="absolute -top-1 -left-1 w-2 h-2 bg-[#23ade5]" />
                         <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-[#23ade5]" />
@@ -229,9 +249,10 @@ export const TrafficFiltration: React.FC = () => {
                             </ArkButton>
                         </div>
                     </div>
-                </div>,
-                document.body
-            )}
-        </div>
-    );
+                </div>
+            </>,
+            document.body
+        )}
+    </>
+);
 };

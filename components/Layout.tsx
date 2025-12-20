@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavItem } from '../types';
 import { useApp } from '../AppContext';
-import { ArkButton } from './ArknightsUI';
+import { ArkButton, ArkModal } from './ArknightsUI';
 import { LogOut, Sun, Moon, Menu, ChevronRight, Terminal, X, Grid, AlertOctagon, Bell, Hexagon, Power } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { t } from '../i18n';
@@ -113,28 +113,19 @@ export const Layout: React.FC<{ children: React.ReactNode, navItems: NavItem[] }
   
   // Modal Animation States
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
 
   const handleLogoutClick = () => {
     setShowLogoutModal(true);
-    setIsClosing(false);
   };
 
   const handleCancelLogout = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-        setShowLogoutModal(false);
-        setIsClosing(false);
-    }, 200);
+    setShowLogoutModal(false);
   };
 
   const confirmLogout = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-        setShowLogoutModal(false);
-        notify('warning', t('notify_logout_title', lang), t('notify_logout_msg', lang));
-        logout();
-    }, 200);
+    setShowLogoutModal(false);
+    notify('warning', t('notify_logout_title', lang), t('notify_logout_msg', lang));
+    logout();
   };
 
   if (!user) return null;
@@ -144,24 +135,25 @@ export const Layout: React.FC<{ children: React.ReactNode, navItems: NavItem[] }
       {mobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-[45] md:hidden backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setMobileMenuOpen(false)} />}
 
       {/* Logout Modal */}
-      {showLogoutModal && (
-        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}>
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleCancelLogout} />
-            <div className={`w-full max-w-sm bg-ark-panel border border-ark-danger/50 shadow-[0_0_30px_rgba(239,68,68,0.2)] relative ${isClosing ? 'animate-ark-modal-out' : 'animate-ark-modal-in'}`}>
-                <div className="absolute -top-1 -left-1 w-3 h-3 bg-ark-danger" />
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-ark-danger" />
-                <div className="p-6 text-center">
-                    <div className="mx-auto w-16 h-16 bg-ark-danger/10 rounded-full flex items-center justify-center mb-4 text-ark-danger border border-ark-danger/30"><AlertOctagon size={32} /></div>
-                    <h3 className="text-xl font-bold text-ark-text mb-2 uppercase tracking-widest">{t('modal_logout_title', lang)}</h3>
-                    <p className="text-sm text-ark-subtext font-mono mb-8">{t('modal_logout_msg', lang)}</p>
-                    <div className="flex gap-3">
-                        <ArkButton variant="ghost" className="flex-1 justify-center" onClick={handleCancelLogout}>{t('modal_cancel', lang)}</ArkButton>
-                        <ArkButton variant="danger" className="flex-1 justify-center bg-ark-danger text-white border-none" onClick={confirmLogout}>{t('modal_confirm', lang)}</ArkButton>
-                    </div>
-                </div>
+      <ArkModal
+        isOpen={showLogoutModal}
+        onClose={handleCancelLogout}
+        title={t('modal_logout_title', lang)}
+        maxWidth="max-w-sm"
+        footer={
+            <div className="flex gap-3 w-full">
+                <ArkButton variant="ghost" className="flex-1 justify-center" onClick={handleCancelLogout}>{t('modal_cancel', lang)}</ArkButton>
+                <ArkButton variant="danger" className="flex-1 justify-center bg-ark-danger text-white border-none" onClick={confirmLogout}>{t('modal_confirm', lang)}</ArkButton>
             </div>
+        }
+      >
+        <div className="text-center">
+            <div className="mx-auto w-16 h-16 bg-ark-danger/10 rounded-full flex items-center justify-center mb-4 text-ark-danger border border-ark-danger/30">
+                <AlertOctagon size={32} />
+            </div>
+            <p className="text-sm text-ark-subtext font-mono mb-2">{t('modal_logout_msg', lang)}</p>
         </div>
-      )}
+      </ArkModal>
 
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 h-full flex flex-col border-r border-ark-border bg-ark-panel transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 shadow-xl md:shadow-none`}>
         <div className="h-16 flex items-center px-5 border-b border-ark-border bg-ark-panel relative overflow-hidden group">
@@ -204,7 +196,12 @@ export const Layout: React.FC<{ children: React.ReactNode, navItems: NavItem[] }
           </div>
           <div className="flex items-center gap-2 md:gap-4">
              <button onClick={() => navigate('/messages')} className="relative p-2 text-ark-text hover:text-ark-primary hover:bg-ark-active/20 rounded-sm transition-colors border border-transparent hover:border-ark-primary/30" title={t('mc_title', lang)}>
-                <Bell size={20} /><div className={`absolute top-1 right-1.5 pointer-events-none transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] origin-center ${unreadCount > 0 ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`}><span className="relative flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-[1px] bg-ark-danger opacity-75 rotate-45"></span><span className="relative inline-flex h-2.5 w-2.5 bg-ark-danger border border-ark-panel rotate-45"></span></span></div>
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <div className="absolute -top-1 -right-1 bg-ark-danger text-white text-[10px] font-bold px-1 min-w-[16px] h-4 flex items-center justify-center rounded-full border border-ark-panel animate-in zoom-in duration-300 shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </div>
+                )}
              </button>
              <div className="flex items-center bg-ark-bg border border-ark-border rounded-sm p-0.5">
                  <button onClick={toggleTheme} className="p-1.5 hover:bg-ark-panel text-ark-subtext hover:text-ark-text transition-colors rounded-sm">{darkMode ? <Sun size={16} /> : <Moon size={16} />}</button>

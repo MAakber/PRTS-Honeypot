@@ -45,9 +45,13 @@ export interface NodeStatus {
   status: 'online' | 'offline' | 'warning';
   load: number;
   ip: string;
-  os: 'linux' | 'windows' | 'mac' | 'alpine';
+  os: string;
   template: string;
   trafficHistory: number[];
+  uptime?: string;
+  version?: string;
+  interface?: string;
+  mac?: string;
 }
 
 export interface HackerProfile {

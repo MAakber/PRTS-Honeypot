@@ -324,14 +324,11 @@ export const DefenseLevel: React.FC = () => {
 
             {/* Confirmation Modal - Interactive & Animated */}
             {isConfirmOpen && createPortal(
-                <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}>
+                <div className={"fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-200 " + (isClosing ? 'opacity-0' : 'opacity-100')}>
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
                     
                     <div 
-                        className={`
-                            relative w-full max-w-md bg-ark-panel border-2 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col p-1 transition-all duration-300
-                            ${isClosing ? 'animate-ark-modal-out' : 'animate-ark-modal-in'}
-                        `}
+                        className={"relative w-full max-w-md bg-ark-panel border-2 shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col p-1 transition-all duration-300 " + (isClosing ? 'animate-ark-modal-out' : 'animate-ark-modal-in')}
                         style={{ borderColor: config.color, minHeight: '300px' }}
                     >
                         {/* Decorative Header Bar */}

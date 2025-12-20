@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArkCard, ArkButton, ArkBadge } from './ArknightsUI';
-import { MOCK_ATTACKS } from '../constants';
+import { ArkCard, ArkButton, ArkBadge, ArkLoading } from './ArknightsUI';
 import { AttackLog } from '../types';
 import { X, Search, Download, ChevronDown, RefreshCw, PlusSquare, MinusSquare, Copy, Eye, Globe, Server, Activity, ArrowRight, ShieldAlert, FileText } from 'lucide-react';
 import { useApp } from '../AppContext';
@@ -50,7 +49,7 @@ const AttackListVisual = () => {
 }
 
 export const AttackList: React.FC = () => {
-  const { lang, modules, toggleModule } = useApp();
+  const { lang, modules, toggleModule, attacks: rtAttacks, authFetch } = useApp();
   const { notify } = useNotification();
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -63,21 +62,13 @@ export const AttackList: React.FC = () => {
   const fetchAttacks = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('prts_token');
-      const response = await fetch('/api/v1/attacks', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await authFetch('/api/v1/attacks');
       if (response.ok) {
         const data = await response.json();
         setAttacks(data);
-      } else {
-        setAttacks(MOCK_ATTACKS); // Fallback
       }
     } catch (error) {
       console.error("Failed to fetch attacks", error);
-      setAttacks(MOCK_ATTACKS); // Fallback
     } finally {
       setLoading(false);
     }
@@ -85,7 +76,10 @@ export const AttackList: React.FC = () => {
 
   useEffect(() => {
     fetchAttacks();
-  }, []);
+  }, [authFetch]);
+
+  // Combine historical and real-time attacks
+  const allAttacks = [...rtAttacks, ...attacks];
 
   const handleToggle = () => {
       const newState = !enabled;
@@ -94,7 +88,7 @@ export const AttackList: React.FC = () => {
   };
 
   // Data Mocking
-  const displayLogs = (attacks.length > 0 ? attacks : MOCK_ATTACKS).map((log, i) => {
+  const displayLogs = allAttacks.map((log, i) => {
       let locKey = 'unknown';
       if (log.location.includes('Shanghai')) locKey = 'city_shanghai';
       else if (log.location.includes('Moscow')) locKey = 'city_moscow';
@@ -272,9 +266,12 @@ export const AttackList: React.FC = () => {
 
       {/* Table Container */}
       <div className="flex-1 flex flex-col min-h-[400px] border border-ark-border dark:border-gray-800 bg-ark-panel overflow-hidden relative shadow-sm">
-         <div className="flex-1 overflow-auto custom-scrollbar">
-             
-             {/* Mobile View */}
+         {loading ? (
+             <ArkLoading label="FETCHING_THREAT_DATA" />
+         ) : (
+             <div className="flex-1 overflow-auto custom-scrollbar">
+                 
+                 {/* Mobile View */}
              <div className="md:hidden">
                  {displayLogs.map((log) => {
                      const isExpanded = expandedLogId === log.id;
@@ -400,6 +397,7 @@ export const AttackList: React.FC = () => {
                  </div>
              </div>
          </div>
+         )}
       </div>
     </div>
   );

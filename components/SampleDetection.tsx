@@ -1,9 +1,8 @@
 
-import React, { useState } from 'react';
-import { ArkButton } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { MOCK_SAMPLE_LOGS } from '../constants';
 import { Lang } from '../types';
 import { Network, Database, Cloud, FileCode, Search, RefreshCw, X, Download, Trash2, Box, Eye, Calendar, Skull, Server, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { useNotification } from './NotificationSystem';
@@ -88,10 +87,31 @@ const FlowDiagram: React.FC<{ lang: Lang }> = ({ lang }) => {
 }
 
 export const SampleDetection: React.FC = () => {
-    const { lang, modules, toggleModule } = useApp();
+    const { lang, modules, toggleModule, authFetch } = useApp();
     const { notify } = useNotification();
     const enabled = modules.payload;
     const [dateRange, setDateRange] = useState({ start: '2025-11-07T00:00', end: '2025-12-06T23:59' });
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const response = await authFetch('/api/v1/samples');
+            if (response.ok) {
+                const data = await response.json();
+                setLogs(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch sample logs", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLogs();
+    }, [authFetch]);
 
     const handleAnalysis = () => notify('info', t('op_success', lang), t('op_analysis_start', lang));
     const handleDownload = () => notify('success', t('op_success', lang), t('op_download_start', lang));
@@ -222,98 +242,106 @@ export const SampleDetection: React.FC = () => {
 
             {/* Table */}
             <div className="flex-1 flex flex-col min-h-[500px] bg-ark-panel border border-ark-border overflow-hidden shadow-sm relative">
-                <div className="overflow-x-auto custom-scrollbar flex-1">
-                     <table className="w-full text-left text-sm min-w-[1400px]">
-                         <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
-                             <tr>
-                                 <th className="p-4 whitespace-nowrap">{t('sd_col_info', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap w-[120px]">{t('sd_col_threat', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('sd_col_status', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('sd_col_count', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('sd_col_time', lang)} ↕</th>
-                                 <th className="p-4 whitespace-nowrap">{t('sd_col_attacker', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('sd_col_node', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap">{t('sd_col_hash', lang)}</th>
-                                 <th className="p-4 whitespace-nowrap text-center">{t('sd_col_op', lang)}</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y divide-ark-border font-mono text-xs">
-                             {MOCK_SAMPLE_LOGS.length > 0 ? (
-                                 MOCK_SAMPLE_LOGS.map((log) => (
-                                     <tr key={log.id} className="hover:bg-ark-active/5 transition-colors group">
-                                         <td className="p-4">
-                                             <div className="flex flex-col">
-                                                 <span className="font-bold text-ark-text text-sm group-hover:text-ark-primary transition-colors cursor-pointer hover:underline">{log.fileName}</span>
-                                                 <span className="text-[10px] text-ark-subtext mt-0.5">{log.fileSize} | {log.fileType}</span>
-                                             </div>
-                                         </td>
-                                         <td className="p-4">
-                                             <span className={`px-2 py-1 text-[10px] uppercase font-bold border rounded-sm ${getThreatColor(log.threatLevel)} bg-opacity-10`}>
-                                                 {getThreatLabel(log.threatLevel)}
-                                             </span>
-                                         </td>
-                                         <td className="p-4">
-                                             <div className="flex items-center gap-1.5">
-                                                 <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'completed' ? 'bg-green-500' : log.status === 'analyzing' ? 'bg-ark-primary animate-pulse' : 'bg-gray-500'}`} />
-                                                 <span className="capitalize text-ark-text">{log.status}</span>
-                                             </div>
-                                         </td>
-                                         <td className="p-4 text-ark-text font-bold pl-8">{log.captureCount}</td>
-                                         <td className="p-4 text-ark-subtext">{log.lastTime}</td>
-                                         <td className="p-4 text-ark-text hover:text-ark-primary cursor-pointer">{log.attackerIp}</td>
-                                         <td className="p-4 text-ark-subtext">{log.sourceNode}</td>
-                                         <td className="p-4">
-                                             <div className="flex items-center gap-2 group/hash">
-                                                 <span className="text-ark-subtext max-w-[100px] truncate">{log.sha256}</span>
-                                                 <button className="opacity-0 group-hover/hash:opacity-100 text-ark-primary hover:text-ark-text transition-opacity" title={t('label_copy', lang)}>
-                                                     <FileText size={12} />
-                                                 </button>
-                                             </div>
-                                         </td>
-                                         <td className="p-4">
-                                             <div className="flex items-center justify-center gap-3">
-                                                 <button onClick={handleAnalysis} className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_submit_analysis', lang)}>
-                                                     <Cloud size={16} />
-                                                 </button>
-                                                 <button onClick={handleDownload} className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('cp_btn_download', lang)}>
-                                                     <Download size={16} />
-                                                 </button>
-                                                 <button onClick={handleDelete} className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('mc_delete', lang)}>
-                                                     <Trash2 size={16} />
-                                                 </button>
-                                             </div>
-                                         </td>
-                                     </tr>
-                                 ))
-                             ) : (
-                                 <tr>
-                                     <td colSpan={9} className="p-20 text-center">
-                                         <div className="flex flex-col items-center justify-center opacity-50 gap-4">
-                                             <div className="w-16 h-16 border-2 border-dashed border-ark-subtext rounded-full flex items-center justify-center bg-ark-active/5">
-                                                 <Box size={32} className="text-ark-subtext" />
-                                             </div>
-                                             <span className="text-ark-subtext font-mono tracking-widest text-xs">{t('no_data', lang)}</span>
-                                         </div>
-                                     </td>
-                                 </tr>
-                             )}
-                         </tbody>
-                     </table>
-                </div>
-
-                {/* Footer Pagination */}
-                <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs font-mono text-ark-subtext">
-                    <span>{t('total_records', lang)} {MOCK_SAMPLE_LOGS.length}</span>
-                    <div className="flex gap-1">
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronLeft size={12} /></button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-primary bg-ark-primary text-black font-bold">1</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">2</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">3</button>
-                        <span className="mx-1">...</span>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">8</button>
-                        <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors"><ChevronRight size={12} /></button>
+                {loading ? (
+                    <div className="flex-1 flex items-center justify-center">
+                        <ArkLoading />
                     </div>
-                </div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto custom-scrollbar flex-1">
+                            <table className="w-full text-left text-sm min-w-[1400px]">
+                                <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs font-bold uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
+                                    <tr>
+                                        <th className="p-4 whitespace-nowrap">{t('sd_col_info', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap w-[120px]">{t('sd_col_threat', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap">{t('sd_col_status', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('sd_col_count', lang)} ↕</th>
+                                        <th className="p-4 whitespace-nowrap cursor-pointer hover:text-ark-primary select-none">{t('sd_col_time', lang)} ↕</th>
+                                        <th className="p-4 whitespace-nowrap">{t('sd_col_attacker', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap">{t('sd_col_node', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap">{t('sd_col_hash', lang)}</th>
+                                        <th className="p-4 whitespace-nowrap text-center">{t('sd_col_op', lang)}</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-ark-border font-mono text-xs">
+                                    {logs.length > 0 ? (
+                                        logs.map((log) => (
+                                            <tr key={log.id} className="hover:bg-ark-active/5 transition-colors group">
+                                                <td className="p-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-ark-text text-sm group-hover:text-ark-primary transition-colors cursor-pointer hover:underline">{log.fileName}</span>
+                                                        <span className="text-[10px] text-ark-subtext mt-0.5">{log.fileSize} | {log.fileType}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 text-[10px] uppercase font-bold border rounded-sm ${getThreatColor(log.threatLevel)} bg-opacity-10`}>
+                                                        {getThreatLabel(log.threatLevel)}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${log.status === 'completed' ? 'bg-green-500' : log.status === 'analyzing' ? 'bg-ark-primary animate-pulse' : 'bg-gray-500'}`} />
+                                                        <span className="capitalize text-ark-text">{log.status}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-ark-text font-bold pl-8">{log.captureCount}</td>
+                                                <td className="p-4 text-ark-subtext">{log.lastTime}</td>
+                                                <td className="p-4 text-ark-text hover:text-ark-primary cursor-pointer">{log.attackerIp}</td>
+                                                <td className="p-4 text-ark-subtext">{log.sourceNode}</td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2 group/hash">
+                                                        <span className="text-ark-subtext max-w-[100px] truncate">{log.sha256}</span>
+                                                        <button className="opacity-0 group-hover/hash:opacity-100 text-ark-primary hover:text-ark-text transition-opacity" title={t('label_copy', lang)}>
+                                                            <FileText size={12} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center justify-center gap-3">
+                                                        <button onClick={handleAnalysis} className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_submit_analysis', lang)}>
+                                                            <Cloud size={16} />
+                                                        </button>
+                                                        <button onClick={handleDownload} className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('cp_btn_download', lang)}>
+                                                            <Download size={16} />
+                                                        </button>
+                                                        <button onClick={handleDelete} className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('mc_delete', lang)}>
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={9} className="p-20 text-center">
+                                                <div className="flex flex-col items-center justify-center opacity-50 gap-4">
+                                                    <div className="w-16 h-16 border-2 border-dashed border-ark-subtext rounded-full flex items-center justify-center bg-ark-active/5">
+                                                        <Box size={32} className="text-ark-subtext" />
+                                                    </div>
+                                                    <span className="text-ark-subtext font-mono tracking-widest text-xs">{t('no_data', lang)}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Footer Pagination */}
+                        <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-end items-center gap-4 text-xs font-mono text-ark-subtext">
+                            <span>{t('total_records', lang)} {logs.length}</span>
+                            <div className="flex gap-1">
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors disabled:opacity-50" disabled><ChevronLeft size={12} /></button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-primary bg-ark-primary text-black font-bold">1</button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">2</button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">3</button>
+                                <span className="mx-1">...</span>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors">8</button>
+                                <button className="w-6 h-6 flex items-center justify-center border border-ark-border hover:border-ark-primary hover:text-ark-primary transition-colors"><ChevronRight size={12} /></button>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

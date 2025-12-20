@@ -1,10 +1,9 @@
 
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ArkButton, ArkPageHeader, ArkInput, ArkCard } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkButton, ArkPageHeader, ArkInput, ArkCard, ArkModal } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { FileText, Bell, Webhook, Database, Key, LayoutGrid, Clock, Share2, Save, Terminal, Shield, Plus, Copy, RefreshCw, Trash2, ExternalLink, Mail, HardDrive, Lock, Image, MapPin, Radio, Upload, User, LogIn, Activity, Users, X, Sparkles, Network } from 'lucide-react';
+import { FileText, Bell, Webhook, Database, Key, LayoutGrid, Clock, Share2, Save, Terminal, Shield, Plus, Copy, RefreshCw, Trash2, ExternalLink, Mail, HardDrive, Lock, Image, MapPin, Radio, Upload, User, LogIn, Activity, Users, X, Sparkles, Network, ShieldAlert } from 'lucide-react';
 import { useNotification } from './NotificationSystem';
 
 const ConfigTab: React.FC<{ 
@@ -39,21 +38,119 @@ const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ ch
     </div>
 );
 
-// Mock Login Logs
-const MOCK_LOGIN_LOGS = [
-    { id: 1, time: '2025-12-06 10:23:45', ip: '192.168.1.50', status: 'success', device: 'Chrome 118 / Windows 10' },
-    { id: 2, time: '2025-12-05 18:12:11', ip: '192.168.1.55', status: 'failure', device: 'Firefox 115 / Linux' },
-    { id: 3, time: '2025-12-05 09:30:00', ip: '10.0.0.5', status: 'success', device: 'Safari / macOS' },
-    { id: 4, time: '2025-12-04 14:22:33', ip: '192.168.1.50', status: 'success', device: 'Chrome 118 / Windows 10' },
-    { id: 5, time: '2025-12-04 11:05:10', ip: '172.16.0.2', status: 'failure', device: 'Unknown / Android' },
-];
+interface LoginLog {
+    id: number;
+    time: string;
+    ip: string;
+    status: string;
+    device: string;
+}
 
 export const SystemConfig: React.FC = () => {
-    const { lang, user } = useApp();
+    const { lang, user, authFetch } = useApp();
     const { notify } = useNotification();
     const [activeTab, setActiveTab] = useState('intel');
     const [isSaving, setIsSaving] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [ntpStatus, setNtpStatus] = useState({
+        status: 'unknown',
+        offset: 0,
+        lastSync: null as string | null
+    });
+    const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
+    const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const token = localStorage.getItem('prts_token');
+                const res = await fetch('/api/v1/config', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    
+                    // Intel
+                    if (data.intel_config) setIntelConfig(JSON.parse(data.intel_config));
+                    
+                    // API & AI
+                    if (data.api_enabled) setApiEnabled(data.api_enabled === 'true');
+                    if (data.ai_enabled) setAiEnabled(data.ai_enabled === 'true');
+                    if (data.ai_config) setAiConfig(JSON.parse(data.ai_config));
+                    
+                    // Notifications
+                    if (data.email_enabled) setEmailEnabled(data.email_enabled === 'true');
+                    if (data.email_config) setEmailConfig(JSON.parse(data.email_config));
+                    if (data.syslog_enabled) setSyslogEnabled(data.syslog_enabled === 'true');
+                    if (data.syslog_config) setSyslogConfig(JSON.parse(data.syslog_config));
+                    if (data.ws_enabled) setWsEnabled(data.ws_enabled === 'true');
+                    if (data.ws_config) setWsConfig(JSON.parse(data.ws_config));
+                    
+                    // DB
+                    if (data.db_type) setDbType(data.db_type as 'sqlite' | 'mysql');
+                    if (data.db_sqlite_path) setSqlitePath(data.db_sqlite_path);
+                    if (data.db_mysql_config) setMysqlConfig(JSON.parse(data.db_mysql_config));
+                    if (data.db_retention) setDbRetention(parseInt(data.db_retention));
+                    
+                    // Login
+                    if (data.login_policy) setLoginPolicy(JSON.parse(data.login_policy));
+                    
+                    // Custom
+                    if (data.custom_config) setCustomConfig(JSON.parse(data.custom_config));
+                    
+                    // NTP
+                    if (data.ntp_config) setNtpConfig(JSON.parse(data.ntp_config));
+                    if (data.time_offset) {
+                        const offsetNs = parseInt(data.time_offset);
+                        setNtpStatus(prev => ({
+                            ...prev,
+                            status: 'synchronized',
+                            offset: offsetNs / 1e9,
+                            lastSync: data.last_sync_time || null
+                        }));
+                    }
+                    
+                    // Tracing
+                    if (data.trace_enabled) setTraceEnabled(data.trace_enabled === 'true');
+                    if (data.trace_config) setTraceConfig(JSON.parse(data.trace_config));
+                }
+            } catch (e) {
+                console.error("Failed to fetch config", e);
+            }
+        };
+        fetchConfig();
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'login') {
+            const fetchData = async () => {
+                setIsLoadingLogs(true);
+                try {
+                    const token = localStorage.getItem('prts_token');
+                    const headers = { 'Authorization': `Bearer ${token}` };
+                    
+                    const [logsRes, usersRes] = await Promise.all([
+                        fetch('/api/v1/login-logs', { headers }),
+                        fetch('/api/v1/users', { headers })
+                    ]);
+
+                    if (logsRes.ok) {
+                        const data = await logsRes.json();
+                        setLoginLogs(data);
+                    }
+                    if (usersRes.ok) {
+                        const data = await usersRes.json();
+                        setUserList(data);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch login data", e);
+                } finally {
+                    setIsLoadingLogs(false);
+                }
+            };
+            fetchData();
+        }
+    }, [activeTab]);
     
     // --- Configuration States ---
 
@@ -68,8 +165,8 @@ export const SystemConfig: React.FC = () => {
     const [apiEnabled, setApiEnabled] = useState(true);
     const [aiEnabled, setAiEnabled] = useState(false);
     const [aiConfig, setAiConfig] = useState({
-        provider: 'gemini',
-        model: 'gemini-2.5-flash',
+        provider: 'google',
+        model: 'gemini-3-flash-preview',
         apiKey: '',
         endpoint: ''
     });
@@ -95,14 +192,12 @@ export const SystemConfig: React.FC = () => {
 
     // Login Policy
     const [loginPolicy, setLoginPolicy] = useState({ maxRetry: 5, lockout: 30, session: 120, url: 'login_v2', whitelist: '' });
+    const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     
     // User Management
-    const [userList, setUserList] = useState([
-        { id: 1, username: 'admin', role: 'admin', status: 'active', lastLogin: '2025-12-06 10:23:45' },
-        { id: 2, username: 'operator01', role: 'operator', status: 'active', lastLogin: '2025-12-05 09:30:00' },
-    ]);
+    const [userList, setUserList] = useState<any[]>([]);
     const [showUserModal, setShowUserModal] = useState(false);
     const [newUserForm, setNewUserForm] = useState({ username: '', password: '', role: 'admin' });
 
@@ -111,6 +206,26 @@ export const SystemConfig: React.FC = () => {
     const [mysqlConfig, setMysqlConfig] = useState({ host: '127.0.0.1', port: '3306', user: 'root', pass: '', db: 'prts_honeypot' });
     const [sqlitePath, setSqlitePath] = useState('./data/prts.db');
     const [dbRetention, setDbRetention] = useState(180);
+
+    const parseUserAgent = (ua: string) => {
+        if (!ua) return 'Unknown';
+        
+        let os = 'Unknown OS';
+        if (ua.includes('Windows')) os = 'Windows';
+        else if (ua.includes('Macintosh')) os = 'macOS';
+        else if (ua.includes('Linux')) os = 'Linux';
+        else if (ua.includes('Android')) os = 'Android';
+        else if (ua.includes('iPhone')) os = 'iOS';
+
+        let browser = 'Unknown Browser';
+        if (ua.includes('Edg/')) browser = 'Edge';
+        else if (ua.includes('Chrome/')) browser = 'Chrome';
+        else if (ua.includes('Firefox/')) browser = 'Firefox';
+        else if (ua.includes('Safari/') && !ua.includes('Chrome/')) browser = 'Safari';
+        else if (ua.includes('Postman')) browser = 'Postman';
+
+        return `${browser} on ${os}`;
+    };
 
     // Custom
     const [customConfig, setCustomConfig] = useState({ name: 'PRTS HONEYPOT', copyright: '© 2025 RHODES ISLAND' });
@@ -121,75 +236,90 @@ export const SystemConfig: React.FC = () => {
 
     // --- Actions ---
 
-    // Mock Backend Save
+    // Backend Save
     const saveConfigToBackend = async (module: string, data: any) => {
         setIsSaving(true);
-        console.group(`[PRTS Mock Backend] Saving Module: ${module}`);
-        console.log("Payload:", JSON.stringify(data, null, 2));
-        console.groupEnd();
-        
-        // Simulate network delay
-        return new Promise<void>((resolve) => {
-            setTimeout(() => {
-                setIsSaving(false);
-                resolve();
-            }, 800);
-        });
+        try {
+            const token = localStorage.getItem('prts_token');
+            const res = await fetch('/api/v1/config', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error("Failed to save config");
+        } catch (error) {
+            console.error("Save failed:", error);
+            throw error;
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleSave = async () => {
-        let payload = {};
+        let payload: Record<string, string> = {};
         const moduleName = activeTab.toUpperCase();
 
         switch (activeTab) {
             case 'intel':
-                payload = { intel: intelConfig };
+                payload = { intel_config: JSON.stringify(intelConfig) };
                 break;
             case 'api':
                 payload = { 
-                    api: { enabled: apiEnabled }, 
-                    ai: { enabled: aiEnabled, config: aiConfig } 
+                    api_enabled: apiEnabled.toString(),
+                    ai_enabled: aiEnabled.toString(),
+                    ai_config: JSON.stringify(aiConfig)
                 };
                 break;
             case 'notification':
                 payload = {
-                    email: { enabled: emailEnabled, config: emailConfig },
-                    syslog: { enabled: syslogEnabled, config: syslogConfig },
-                    ws: { enabled: wsEnabled, config: wsConfig }
+                    email_enabled: emailEnabled.toString(),
+                    email_config: JSON.stringify(emailConfig),
+                    syslog_enabled: syslogEnabled.toString(),
+                    syslog_config: JSON.stringify(syslogConfig),
+                    ws_enabled: wsEnabled.toString(),
+                    ws_config: JSON.stringify(wsConfig)
                 };
                 break;
             case 'db':
                 payload = {
-                    connection: dbType === 'sqlite' ? { type: 'sqlite', path: sqlitePath } : { type: 'mysql', config: mysqlConfig },
-                    retentionDays: dbRetention
+                    db_type: dbType,
+                    db_sqlite_path: sqlitePath,
+                    db_mysql_config: JSON.stringify(mysqlConfig),
+                    db_retention: dbRetention.toString()
                 };
                 break;
             case 'login':
-                payload = { policy: loginPolicy };
+                payload = { login_policy: JSON.stringify(loginPolicy) };
                 break;
             case 'custom':
-                payload = { branding: customConfig };
+                payload = { custom_config: JSON.stringify(customConfig) };
                 break;
             case 'ntp':
-                payload = { ntp: ntpConfig };
+                payload = { ntp_config: JSON.stringify(ntpConfig) };
                 break;
             case 'tracing':
-                payload = { tracing: { enabled: traceEnabled, config: traceConfig } };
+                payload = { 
+                    trace_enabled: traceEnabled.toString(),
+                    trace_config: JSON.stringify(traceConfig) 
+                };
                 break;
             default:
-                payload = { error: "Unknown module" };
+                return;
         }
 
         try {
             await saveConfigToBackend(moduleName, payload);
             notify('success', t('op_success', lang), t('op_save_success', lang));
         } catch (error) {
-            notify('error', t('op_failed', lang), "Network communication failed.");
+            notify('error', t('op_failed', lang), t('err_network', lang));
         }
     };
 
-    const handleUpdateCredentials = () => {
-        if (!newPassword || !confirmPassword) {
+    const handleUpdateCredentials = async () => {
+        if (!oldPassword || !newPassword || !confirmPassword) {
             notify('warning', t('op_failed', lang), t('val_pwd_empty', lang));
             return;
         }
@@ -197,11 +327,29 @@ export const SystemConfig: React.FC = () => {
             notify('error', t('op_failed', lang), t('val_pwd_mismatch', lang));
             return;
         }
-        saveConfigToBackend('CREDENTIALS', { username: user?.username, newPassword }).then(() => {
-            notify('success', t('op_success', lang), t('op_pwd_updated', lang));
-            setNewPassword('');
-            setConfirmPassword('');
-        });
+        
+        try {
+            const res = await authFetch('/api/v1/user/password', {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    oldPassword: btoa(oldPassword), 
+                    newPassword: btoa(newPassword) 
+                })
+            });
+
+            if (res.ok) {
+                notify('success', t('op_success', lang), t('op_pwd_updated', lang));
+                setOldPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+            } else {
+                const err = await res.json();
+                const msg = err.error === 'Incorrect old password' ? t('err_incorrect_old_pwd', lang) : (err.error || t('op_failed', lang));
+                notify('error', t('op_failed', lang), msg);
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        }
     };
 
     const handleGenerateKey = () => {
@@ -226,14 +374,34 @@ export const SystemConfig: React.FC = () => {
         notify('warning', t('op_success', lang), t('op_key_revoked', lang));
     };
 
-    const handleSync = () => {
+    const handleSync = async () => {
         if (isSyncing) return;
         setIsSyncing(true);
-        // Simulate real synchronization delay
-        setTimeout(() => {
+        try {
+            const token = localStorage.getItem('prts_token');
+            const res = await fetch('/api/v1/system/ntp-sync', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+                setNtpStatus({
+                    status: 'synchronized',
+                    offset: data.offset,
+                    lastSync: data.remoteTime
+                });
+                notify('info', t('op_success', lang), t('op_sync_success', lang));
+            } else {
+                setNtpStatus(prev => ({ ...prev, status: 'error' }));
+                notify('error', t('op_failed', lang), data.error || 'NTP Sync Failed');
+            }
+        } catch (e) {
+            console.error("NTP Sync Error:", e);
+            setNtpStatus(prev => ({ ...prev, status: 'error' }));
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
             setIsSyncing(false);
-            notify('info', t('op_success', lang), t('op_sync_success', lang));
-        }, 1500);
+        }
     };
 
     const handleCleanDb = () => {
@@ -241,27 +409,65 @@ export const SystemConfig: React.FC = () => {
     };
 
     // User Management Handlers
-    const handleDeleteUser = (id: number) => {
-        setUserList(prev => prev.filter(u => u.id !== id));
-        notify('error', t('op_success', lang), t('op_user_deleted', lang));
+    const handleDeleteUser = async (id: number | string) => {
+        if (!id) return;
+        try {
+            const token = localStorage.getItem('prts_token');
+            const res = await fetch(`/api/v1/users/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                // Update local state immediately
+                setUserList(prev => prev.filter(u => (u.id || u.ID) !== id));
+                notify('success', t('op_success', lang), t('op_user_deleted', lang));
+            } else {
+                const errorData = await res.json();
+                notify('error', t('op_failed', lang), errorData.error || 'Failed to delete user');
+            }
+        } catch (e) {
+            notify('error', t('op_failed', lang), 'Failed to delete user');
+        }
     };
 
-    const handleCreateUser = () => {
+    const handleCreateUser = async () => {
         if (!newUserForm.username || !newUserForm.password) {
             notify('warning', t('op_failed', lang), t('val_user_req', lang));
             return;
         }
-        const newUser = {
-            id: userList.length + 1,
-            username: newUserForm.username,
-            role: newUserForm.role,
-            status: 'active',
-            lastLogin: '--'
-        };
-        setUserList([...userList, newUser]);
-        setShowUserModal(false);
-        setNewUserForm({ username: '', password: '', role: 'admin' });
-        notify('success', t('op_success', lang), t('op_user_created', lang));
+        
+        try {
+            const token = localStorage.getItem('prts_token');
+            const res = await fetch('/api/v1/users', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: newUserForm.username,
+                    password: btoa(newUserForm.password),
+                    role: 'admin' // Default to admin as requested
+                })
+            });
+
+            if (res.ok) {
+                const newUser = await res.json();
+                setUserList([...userList, {
+                    ...newUser,
+                    status: 'active',
+                    lastLogin: '--'
+                }]);
+                setShowUserModal(false);
+                setNewUserForm({ username: '', password: '', role: 'admin' });
+                notify('success', t('op_success', lang), t('op_user_created', lang));
+            } else {
+                const errorData = await res.json();
+                notify('error', t('op_failed', lang), errorData.error || 'Failed to create user');
+            }
+        } catch (e) {
+            notify('error', t('op_failed', lang), 'Failed to create user');
+        }
     };
 
     const tabs = [
@@ -442,7 +648,7 @@ export const SystemConfig: React.FC = () => {
                                                     onChange={(e) => setAiConfig({...aiConfig, provider: e.target.value})}
                                                     className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono outline-none focus:border-ark-primary appearance-none rounded-none"
                                                 >
-                                                    <option value="gemini">Google Gemini</option>
+                                                    <option value="google">Google Gemini</option>
                                                     <option value="openai">OpenAI</option>
                                                     <option value="deepseek">DeepSeek</option>
                                                     <option value="local">Local (Ollama)</option>
@@ -791,6 +997,10 @@ export const SystemConfig: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="space-y-1">
+                                        <label className="text-xs font-mono text-ark-subtext">{t('sc_login_old_pwd', lang)}</label>
+                                        <ArkInput type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} />
+                                    </div>
+                                    <div className="space-y-1">
                                         <label className="text-xs font-mono text-ark-subtext">{t('sc_login_new_pwd', lang)}</label>
                                         <ArkInput type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
                                     </div>
@@ -879,90 +1089,77 @@ export const SystemConfig: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-ark-border font-mono text-xs">
-                                            {userList.map(u => (
-                                                <tr key={u.id} className="hover:bg-ark-active/5 transition-colors">
-                                                    <td className="p-3 pl-4 font-bold text-ark-text">{u.username}</td>
-                                                    <td className="p-3 text-ark-subtext">{u.role === 'admin' ? t('sc_user_role_admin', lang) : t('sc_user_role_operator', lang)}</td>
-                                                    <td className="p-3">
-                                                        <span className="px-2 py-0.5 rounded-sm uppercase text-[10px] font-bold border border-green-500/30 bg-green-500/10 text-green-500">
-                                                            {t('sc_user_status_active', lang)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-3 text-ark-subtext">{u.lastLogin}</td>
-                                                    <td className="p-3 text-right pr-4">
-                                                        {u.username !== 'admin' && (
-                                                            <button 
-                                                                onClick={() => handleDeleteUser(u.id)}
-                                                                className="p-1.5 hover:bg-ark-danger/20 text-ark-subtext hover:text-ark-danger transition-colors rounded-sm"
-                                                                title={t('mc_delete', lang)}
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        )}
+                                            {userList.length > 0 ? (
+                                                userList.map(u => (
+                                                    <tr key={u.id || u.ID} className="hover:bg-ark-active/5 transition-colors">
+                                                        <td className="p-3 pl-4 font-bold text-ark-text">{u.username}</td>
+                                                        <td className="p-3 text-ark-subtext">{u.role === 'admin' ? t('sc_user_role_admin', lang) : t('sc_user_role_operator', lang)}</td>
+                                                        <td className="p-3">
+                                                            <span className="px-2 py-0.5 rounded-sm uppercase text-[10px] font-bold border border-green-500/30 bg-green-500/10 text-green-500">
+                                                                {t('sc_user_status_active', lang)}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 text-ark-subtext">{u.lastLogin}</td>
+                                                        <td className="p-3 text-right pr-4">
+                                                            {u.username !== user?.username && (
+                                                                <button 
+                                                                    onClick={() => handleDeleteUser(u.id || u.ID)}
+                                                                    className="p-1.5 hover:bg-ark-danger/20 text-ark-subtext hover:text-ark-danger transition-colors rounded-sm"
+                                                                    title={t('mc_delete', lang)}
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan={5} className="p-8 text-center text-ark-subtext">
+                                                        {t('no_data', lang)}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
                             </ArkCard>
 
-                            {/* Create User Modal - Portal to Body */}
-                            {showUserModal && createPortal(
-                                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200 text-ark-text">
-                                    <div className="w-full max-w-sm bg-ark-panel border border-ark-primary/50 shadow-[0_0_30px_rgba(35,173,229,0.2)] relative">
-                                        <div className="absolute -top-1 -left-1 w-3 h-3 bg-ark-primary" />
-                                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-ark-primary" />
-                                        
-                                        <div className="p-6">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <h3 className="text-lg font-bold text-ark-text uppercase tracking-widest flex items-center gap-2">
-                                                    <Users size={20} className="text-ark-primary" /> {t('sc_user_modal_title', lang)}
-                                                </h3>
-                                                <button onClick={() => setShowUserModal(false)} className="text-ark-subtext hover:text-ark-text"><X size={20}/></button>
-                                            </div>
-                                            
-                                            <div className="space-y-4 mb-8">
-                                                <div className="space-y-1">
-                                                    <label className="text-xs font-mono text-ark-subtext">{t('sc_user_col_username', lang)}</label>
-                                                    <ArkInput 
-                                                        value={newUserForm.username} 
-                                                        onChange={e => setNewUserForm({...newUserForm, username: e.target.value})} 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-xs font-mono text-ark-subtext">{t('ar_col_password', lang)}</label>
-                                                    <ArkInput 
-                                                        type="password" 
-                                                        value={newUserForm.password} 
-                                                        onChange={e => setNewUserForm({...newUserForm, password: e.target.value})} 
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-xs font-mono text-ark-subtext">{t('sc_user_col_role', lang)}</label>
-                                                    <select 
-                                                        className="w-full bg-ark-bg border-b-2 border-ark-border px-3 py-2 text-sm text-ark-text font-mono opacity-50 cursor-not-allowed"
-                                                        value="admin"
-                                                        disabled
-                                                    >
-                                                        <option value="admin">{t('sc_user_role_admin', lang)}</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="flex gap-3">
-                                                <ArkButton variant="ghost" className="flex-1 justify-center" onClick={() => setShowUserModal(false)}>
-                                                    {t('btn_cancel', lang)}
-                                                </ArkButton>
-                                                <ArkButton variant="primary" className="flex-1 justify-center" onClick={handleCreateUser}>
-                                                    {t('btn_confirm', lang)}
-                                                </ArkButton>
-                                            </div>
-                                        </div>
+                            {/* Create User Modal */}
+                            <ArkModal
+                                isOpen={showUserModal}
+                                onClose={() => setShowUserModal(false)}
+                                title={t('sc_user_modal_title', lang)}
+                                icon={<Users size={20} className="text-ark-primary" />}
+                                footer={
+                                    <div className="flex gap-3 w-full">
+                                        <ArkButton variant="ghost" className="flex-1 justify-center" onClick={() => setShowUserModal(false)}>
+                                            {t('btn_cancel', lang)}
+                                        </ArkButton>
+                                        <ArkButton variant="primary" className="flex-1 justify-center" onClick={handleCreateUser}>
+                                            {t('btn_confirm', lang)}
+                                        </ArkButton>
                                     </div>
-                                </div>,
-                                document.body
-                            )}
+                                }
+                            >
+                                <div className="space-y-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-mono text-ark-subtext">{t('sc_user_col_username', lang)}</label>
+                                        <ArkInput 
+                                            value={newUserForm.username} 
+                                            onChange={e => setNewUserForm({...newUserForm, username: e.target.value})} 
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-mono text-ark-subtext">{t('ar_col_password', lang)}</label>
+                                        <ArkInput 
+                                            type="password" 
+                                            value={newUserForm.password} 
+                                            onChange={e => setNewUserForm({...newUserForm, password: e.target.value})} 
+                                        />
+                                    </div>
+                                </div>
+                            </ArkModal>
 
                             {/* Login Logs Card */}
                             <ArkCard title={t('sc_login_logs_title', lang)} contentClassName="p-0">
@@ -977,18 +1174,36 @@ export const SystemConfig: React.FC = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-ark-border font-mono text-xs">
-                                            {MOCK_LOGIN_LOGS.map(log => (
-                                                <tr key={log.id} className="hover:bg-ark-active/5 transition-colors">
-                                                    <td className="p-3 pl-4 text-ark-subtext">{log.time}</td>
-                                                    <td className="p-3 font-bold text-ark-text">{log.ip}</td>
-                                                    <td className="p-3 text-ark-subtext">{log.device}</td>
-                                                    <td className="p-3 text-right pr-4">
-                                                        <span className={`px-2 py-0.5 rounded-sm uppercase text-[10px] font-bold border ${log.status === 'success' ? 'border-green-500/30 bg-green-500/10 text-green-500' : 'border-red-500/30 bg-red-500/10 text-red-500'}`}>
-                                                            {log.status === 'success' ? t('status_success', lang) : t('status_failure', lang)}
-                                                        </span>
+                                            {isLoadingLogs ? (
+                                                <tr>
+                                                    <td colSpan={4} className="p-8 text-center text-ark-subtext animate-pulse">
+                                                        {t('loading', lang)}...
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            ) : loginLogs.length > 0 ? (
+                                                loginLogs.map(log => (
+                                                    <tr key={log.id} className="hover:bg-ark-active/5 transition-colors">
+                                                        <td className="p-3 pl-4 text-ark-subtext">{log.time}</td>
+                                                        <td className="p-3 font-bold text-ark-text">{log.ip}</td>
+                                                        <td className="p-3 text-ark-subtext" title={log.device}>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="max-w-[200px] truncate">{parseUserAgent(log.device)}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 text-right pr-4">
+                                                            <span className={`px-2 py-0.5 rounded-sm uppercase text-[10px] font-bold border ${log.status === 'success' ? 'border-green-500/30 bg-green-500/10 text-green-500' : 'border-red-500/30 bg-red-500/10 text-red-500'}`}>
+                                                                {log.status === 'success' ? t('status_success', lang) : t('status_failure', lang)}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan={4} className="p-8 text-center text-ark-subtext">
+                                                        {t('no_data', lang)}
+                                                    </td>
+                                                </tr>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1068,10 +1283,29 @@ export const SystemConfig: React.FC = () => {
                                     <div className="w-full md:w-64 bg-ark-bg border border-ark-border p-4 flex flex-col items-center justify-center gap-2 text-center h-full">
                                         <Clock size={32} className="text-ark-primary mb-2" />
                                         <div className="text-sm font-bold text-ark-text">{t('sc_ntp_status', lang)}</div>
-                                        <div className="text-xs text-green-500 font-mono">Synchronized</div>
+                                        <div className={`text-xs font-mono ${
+                                            ntpStatus.status === 'synchronized' ? 'text-green-500' : 
+                                            ntpStatus.status === 'error' ? 'text-red-500' : 
+                                            ntpStatus.status === 'unknown' ? 'text-ark-subtext' : 'text-yellow-500'
+                                        }`}>
+                                            {ntpStatus.status === 'synchronized' ? t('sc_ntp_state_synced', lang) : 
+                                             ntpStatus.status === 'error' ? t('sc_ntp_state_error', lang) : 
+                                             ntpStatus.status === 'unknown' ? t('sc_ntp_state_unknown', lang) :
+                                             t('sc_ntp_state_syncing', lang)}
+                                        </div>
                                         <div className="w-full h-[1px] bg-ark-border my-2"/>
                                         <div className="text-xs text-ark-subtext">{t('sc_ntp_offset', lang)}</div>
-                                        <div className="text-xl font-bold font-mono text-ark-text">+0.002s</div>
+                                        <div className="text-xl font-bold font-mono text-ark-text">
+                                            {ntpStatus.offset > 0 ? '+' : ''}{ntpStatus.offset.toFixed(4)}s
+                                        </div>
+                                        {ntpStatus.lastSync && (
+                                            <>
+                                                <div className="w-full h-[1px] bg-ark-border my-2"/>
+                                                <div className="text-[10px] text-ark-subtext font-mono">
+                                                    {new Date(ntpStatus.lastSync).toLocaleString()}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </ArkCard>

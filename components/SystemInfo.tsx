@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
 import { QrCode, Globe, Terminal } from 'lucide-react';
@@ -16,6 +16,44 @@ const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ ch
 export const SystemInfo: React.FC = () => {
     const { lang } = useApp();
     const [cloudPlanEnabled, setCloudPlanEnabled] = useState(true);
+
+    useEffect(() => {
+        const fetchCloudPlan = async () => {
+            try {
+                const token = localStorage.getItem('prts_token');
+                const res = await fetch('/api/v1/config', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.cloud_plan_enabled) {
+                        setCloudPlanEnabled(data.cloud_plan_enabled === 'true');
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch cloud plan config", e);
+            }
+        };
+        fetchCloudPlan();
+    }, []);
+
+    const handleToggleCloudPlan = async () => {
+        const newValue = !cloudPlanEnabled;
+        setCloudPlanEnabled(newValue);
+        try {
+            const token = localStorage.getItem('prts_token');
+            await fetch('/api/v1/config', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ cloud_plan_enabled: newValue.toString() })
+            });
+        } catch (e) {
+            console.error("Failed to save cloud plan config", e);
+        }
+    };
 
     return (
         <div className="bg-ark-panel border border-ark-border h-full flex flex-col md:flex-row overflow-hidden shadow-sm">
@@ -42,7 +80,7 @@ export const SystemInfo: React.FC = () => {
                         <div className="space-y-2">
                             <div className="flex items-center gap-3">
                                 <h4 className="font-bold text-ark-text text-sm">{t('si_cloud_plan', lang)}</h4>
-                                <ToggleSwitch checked={cloudPlanEnabled} onChange={() => setCloudPlanEnabled(!cloudPlanEnabled)} />
+                                <ToggleSwitch checked={cloudPlanEnabled} onChange={handleToggleCloudPlan} />
                             </div>
                             <p className="text-xs text-ark-subtext leading-relaxed font-mono">
                                 {t('si_cloud_desc', lang)}

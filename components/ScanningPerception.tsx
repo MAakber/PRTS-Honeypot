@@ -1,9 +1,8 @@
 
-import React, { useState } from 'react';
-import { ArkButton } from './ArknightsUI';
+import React, { useState, useEffect } from 'react';
+import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { MOCK_SCAN_LOGS } from '../constants';
 import { RefreshCw, Settings, Activity, ChevronRight, Clock, MapPin, Network } from 'lucide-react';
 import { ArkDateRangePicker } from './ArkDateRangePicker';
 import { useNotification } from './NotificationSystem';
@@ -61,10 +60,31 @@ const FilterSelect: React.FC<{ options: string[] }> = ({ options }) => (
 );
 
 export const ScanningPerception: React.FC = () => {
-    const { lang, modules, toggleModule } = useApp();
+    const { lang, modules, toggleModule, authFetch } = useApp();
     const { notify } = useNotification();
     const enabled = modules.scanning;
     const [dateRange, setDateRange] = useState({ start: '2023-10-24T00:00', end: '2023-10-24T23:59' });
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const response = await authFetch('/api/v1/scans');
+            if (response.ok) {
+                const data = await response.json();
+                setLogs(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch scan logs", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLogs();
+    }, [authFetch]);
 
     const handleToggle = () => {
         const newState = !enabled;
@@ -163,80 +183,20 @@ export const ScanningPerception: React.FC = () => {
 
              {/* List Content */}
              <div className="flex-1 flex flex-col min-h-[500px] bg-ark-panel border border-ark-border overflow-hidden shadow-sm">
-                 
-                 {/* Mobile Card View */}
-                 <div className="md:hidden flex-1 overflow-auto custom-scrollbar p-0">
-                     {MOCK_SCAN_LOGS.map(log => (
-                         <div key={log.id} className="border-b border-ark-border p-4 hover:bg-ark-active/5 transition-colors">
-                             <div className="flex justify-between items-start mb-2">
-                                 <div className="flex flex-col">
-                                     <span className="font-bold text-ark-text text-sm">{log.ip}</span>
-                                     <span className="text-[10px] text-ark-subtext font-mono mt-0.5">{log.start}</span>
-                                 </div>
-                                 <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase font-bold ${
-                                     log.threat === 'Malicious' ? 'border-red-500/50 text-red-500 bg-red-500/10' :
-                                     log.threat === 'High Risk' ? 'border-orange-500/50 text-orange-500 bg-orange-500/10' :
-                                     log.threat === 'Suspicious' ? 'border-yellow-500/50 text-yellow-500 bg-yellow-500/10' :
-                                     'border-ark-subtext/50 text-ark-subtext bg-ark-subtext/10'
-                                 }`}>
-                                     {log.threat === 'Malicious' ? t('sp_threat_malicious', lang) :
-                                      log.threat === 'High Risk' ? t('sp_threat_high', lang) :
-                                      log.threat === 'Suspicious' ? t('sp_threat_suspicious', lang) :
-                                      log.threat === 'Low' ? t('sp_threat_low', lang) :
-                                      log.threat}
-                                 </span>
-                             </div>
-
-                             <div className="grid grid-cols-2 gap-3 text-xs text-ark-subtext mb-3">
-                                 <div className="flex items-center gap-1.5 overflow-hidden">
-                                     <MapPin size={12} className="shrink-0" />
-                                     <span className="truncate">{log.node} ({log.location})</span>
-                                 </div>
-                                 <div className="flex items-center gap-1.5 justify-end">
-                                     <Clock size={12} className="shrink-0" />
-                                     <span>{log.duration}</span>
-                                 </div>
-                             </div>
-
-                             <div className="bg-ark-bg/50 rounded-sm p-2 flex items-center justify-between text-xs border border-ark-border/50">
-                                 <div className="flex items-center gap-2">
-                                     <span className="bg-ark-active/20 text-ark-primary px-1.5 py-0.5 rounded text-[10px] font-bold uppercase">{log.type}</span>
-                                     <span className="text-ark-text font-mono">{log.count} Pkts</span>
-                                 </div>
-                                 <div className="flex items-center gap-1 text-ark-subtext max-w-[40%]">
-                                     <Network size={12} />
-                                     <span className="truncate">{log.ports}</span>
-                                 </div>
-                             </div>
-                         </div>
-                     ))}
-                 </div>
-
-                 {/* Desktop Table View */}
-                 <div className="hidden md:block overflow-auto custom-scrollbar flex-1">
-                     <table className="w-full text-left text-sm min-w-[1200px]">
-                         <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
-                             <tr>
-                                 <th className="p-4 font-bold whitespace-nowrap w-[200px]">{t('scan_ip', lang)}</th>
-                                 <th className="p-4 font-bold whitespace-nowrap">{t('threat_info', lang)}</th>
-                                 <th className="p-4 font-bold whitespace-nowrap">{t('scanned_node', lang)}</th>
-                                 <th className="p-4 font-bold whitespace-nowrap text-center">{t('scan_type', lang)}</th>
-                                 <th className="p-4 font-bold whitespace-nowrap text-right">{t('scan_count', lang)}</th>
-                                 <th className="p-4 font-bold whitespace-nowrap">{t('scanned_port', lang)}</th>
-                                 <th className="p-4 font-bold whitespace-nowrap">{t('start_time', lang)}</th>
-                                 <th className="p-4 font-bold whitespace-nowrap">{t('duration', lang)}</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y divide-ark-border font-mono text-xs">
-                             {MOCK_SCAN_LOGS.map(log => (
-                                 <tr key={log.id} className="hover:bg-ark-active/5 transition-colors group">
-                                     <td className="p-4">
-                                         <div className="flex items-center gap-2">
-                                             <span className="font-bold text-ark-text group-hover:text-ark-primary transition-colors">{log.ip}</span>
+                 {loading ? (
+                     <ArkLoading label="FETCHING_SCAN_DATA" />
+                 ) : (
+                     <>
+                         {/* Mobile Card View */}
+                         <div className="md:hidden flex-1 overflow-auto custom-scrollbar p-0">
+                             {logs.map(log => (
+                                 <div key={log.id} className="border-b border-ark-border p-4 hover:bg-ark-active/5 transition-colors">
+                                     <div className="flex justify-between items-start mb-2">
+                                         <div className="flex flex-col">
+                                             <span className="font-bold text-ark-text text-sm">{log.ip}</span>
+                                             <span className="text-[10px] text-ark-subtext font-mono mt-0.5">{log.start}</span>
                                          </div>
-                                     </td>
-                                     <td className="p-4">
-                                         <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase ${
+                                         <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase font-bold ${
                                              log.threat === 'Malicious' ? 'border-red-500/50 text-red-500 bg-red-500/10' :
                                              log.threat === 'High Risk' ? 'border-orange-500/50 text-orange-500 bg-orange-500/10' :
                                              log.threat === 'Suspicious' ? 'border-yellow-500/50 text-yellow-500 bg-yellow-500/10' :
@@ -248,34 +208,99 @@ export const ScanningPerception: React.FC = () => {
                                               log.threat === 'Low' ? t('sp_threat_low', lang) :
                                               log.threat}
                                          </span>
-                                     </td>
-                                     <td className="p-4">
-                                         <div className="flex flex-col">
-                                             <span className="text-ark-text">{log.node}</span>
-                                             <div className="flex items-center gap-1 text-[10px] text-ark-subtext">
-                                                 <MapPin size={10} /> {log.location}
-                                             </div>
+                                     </div>
+
+                                     <div className="grid grid-cols-2 gap-3 text-xs text-ark-subtext mb-3">
+                                         <div className="flex items-center gap-1.5 overflow-hidden">
+                                             <MapPin size={12} className="shrink-0" />
+                                             <span className="truncate">{log.node} ({log.location})</span>
                                          </div>
-                                     </td>
-                                     <td className="p-4 text-center">
-                                         <span className="font-bold bg-ark-active/20 px-2 py-1 rounded text-ark-primary">{log.type}</span>
-                                     </td>
-                                     <td className="p-4 text-right font-bold text-ark-text">{log.count}</td>
-                                     <td className="p-4 text-ark-subtext truncate max-w-[200px]" title={log.ports}>{log.ports}</td>
-                                     <td className="p-4 text-ark-subtext">{log.start}</td>
-                                     <td className="p-4 text-ark-text flex items-center gap-1">
-                                         <Clock size={12} className="text-ark-subtext" /> {log.duration}
-                                     </td>
-                                 </tr>
+                                         <div className="flex items-center gap-1.5 justify-end">
+                                             <Clock size={12} className="shrink-0" />
+                                             <span>{log.duration}</span>
+                                         </div>
+                                     </div>
+
+                                     <div className="bg-ark-bg/50 rounded-sm p-2 flex items-center justify-between text-xs border border-ark-border/50">
+                                         <div className="flex items-center gap-2">
+                                             <span className="bg-ark-active/20 text-ark-primary px-1.5 py-0.5 rounded text-[10px] font-bold uppercase">{log.type}</span>
+                                             <span className="text-ark-text font-mono">{log.count} Pkts</span>
+                                         </div>
+                                         <div className="flex items-center gap-1 text-ark-subtext max-w-[40%]">
+                                             <Network size={12} />
+                                             <span className="truncate">{log.ports}</span>
+                                         </div>
+                                     </div>
+                                 </div>
                              ))}
-                         </tbody>
-                     </table>
-                 </div>
+                         </div>
+
+                         {/* Desktop Table View */}
+                         <div className="hidden md:block overflow-auto custom-scrollbar flex-1">
+                             <table className="w-full text-left text-sm min-w-[1200px]">
+                                 <thead className="bg-ark-active/10 text-ark-subtext font-mono text-xs uppercase shadow-sm border-b border-ark-border sticky top-0 z-10 backdrop-blur-md">
+                                     <tr>
+                                         <th className="p-4 font-bold whitespace-nowrap w-[200px]">{t('scan_ip', lang)}</th>
+                                         <th className="p-4 font-bold whitespace-nowrap">{t('threat_info', lang)}</th>
+                                         <th className="p-4 font-bold whitespace-nowrap">{t('scanned_node', lang)}</th>
+                                         <th className="p-4 font-bold whitespace-nowrap text-center">{t('scan_type', lang)}</th>
+                                         <th className="p-4 font-bold whitespace-nowrap text-right">{t('scan_count', lang)}</th>
+                                         <th className="p-4 font-bold whitespace-nowrap">{t('scanned_port', lang)}</th>
+                                         <th className="p-4 font-bold whitespace-nowrap">{t('start_time', lang)}</th>
+                                         <th className="p-4 font-bold whitespace-nowrap">{t('duration', lang)}</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody className="divide-y divide-ark-border font-mono text-xs">
+                                     {logs.map(log => (
+                                         <tr key={log.id} className="hover:bg-ark-active/5 transition-colors group">
+                                             <td className="p-4">
+                                                 <div className="flex items-center gap-2">
+                                                     <span className="font-bold text-ark-text group-hover:text-ark-primary transition-colors">{log.ip}</span>
+                                                 </div>
+                                             </td>
+                                             <td className="p-4">
+                                                 <span className={`px-2 py-0.5 border text-[10px] rounded-sm uppercase ${
+                                                     log.threat === 'Malicious' ? 'border-red-500/50 text-red-500 bg-red-500/10' :
+                                                     log.threat === 'High Risk' ? 'border-orange-500/50 text-orange-500 bg-orange-500/10' :
+                                                     log.threat === 'Suspicious' ? 'border-yellow-500/50 text-yellow-500 bg-yellow-500/10' :
+                                                     'border-ark-subtext/50 text-ark-subtext bg-ark-subtext/10'
+                                                 }`}>
+                                                     {log.threat === 'Malicious' ? t('sp_threat_malicious', lang) :
+                                                      log.threat === 'High Risk' ? t('sp_threat_high', lang) :
+                                                      log.threat === 'Suspicious' ? t('sp_threat_suspicious', lang) :
+                                                      log.threat === 'Low' ? t('sp_threat_low', lang) :
+                                                      log.threat}
+                                                 </span>
+                                             </td>
+                                             <td className="p-4">
+                                                 <div className="flex flex-col">
+                                                     <span className="text-ark-text">{log.node}</span>
+                                                     <div className="flex items-center gap-1 text-[10px] text-ark-subtext">
+                                                         <MapPin size={10} /> {log.location}
+                                                     </div>
+                                                 </div>
+                                             </td>
+                                             <td className="p-4 text-center">
+                                                 <span className="font-bold bg-ark-active/20 px-2 py-1 rounded text-ark-primary">{log.type}</span>
+                                             </td>
+                                             <td className="p-4 text-right font-bold text-ark-text">{log.count}</td>
+                                             <td className="p-4 text-ark-subtext truncate max-w-[200px]" title={log.ports}>{log.ports}</td>
+                                             <td className="p-4 text-ark-subtext">{log.start}</td>
+                                             <td className="p-4 text-ark-text flex items-center gap-1">
+                                                 <Clock size={12} className="text-ark-subtext" /> {log.duration}
+                                             </td>
+                                         </tr>
+                                     ))}
+                                 </tbody>
+                             </table>
+                         </div>
+                     </>
+                 )}
                  {/* Footer */}
                  <div className="p-3 border-t border-ark-border bg-ark-bg flex justify-between items-center text-xs text-ark-subtext font-mono">
                      <span className="hidden md:inline">{t('display_order', lang)} {t('sort_time', lang)}</span>
                      <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                        <span>{t('total_count', lang)} {MOCK_SCAN_LOGS.length}</span>
+                        <span>{t('total_count', lang)} {logs.length}</span>
                         <div className="flex gap-1">
                             <button className="px-2 py-1 border border-ark-border disabled:opacity-50 hover:bg-ark-active hover:text-ark-primary transition-colors" disabled>&lt;</button>
                             <button className="px-2 py-1 border border-ark-border disabled:opacity-50 hover:bg-ark-active hover:text-ark-primary transition-colors" disabled>&gt;</button>

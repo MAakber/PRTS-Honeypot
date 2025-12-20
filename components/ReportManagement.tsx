@@ -1,17 +1,39 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArkButton } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { FileText, Calendar, X, Inbox, ChevronDown, Plus } from 'lucide-react';
+import { FileText, Calendar, X, Inbox, ChevronDown, Plus, Download, Trash2, Eye } from 'lucide-react';
 import { Report } from '../types';
 import { ArkDateRangePicker } from './ArkDateRangePicker';
 
 export const ReportManagement: React.FC = () => {
     const { lang } = useApp();
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'custom'>('daily');
-    const [mockReports, setMockReports] = useState<Report[]>([]); // Start empty to match screenshot
+    const [reports, setReports] = useState<Report[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [dateRange, setDateRange] = useState({ start: '2025-11-30T00:00', end: '2025-12-06T23:59' });
+
+    useEffect(() => {
+        const fetchReports = async () => {
+            setIsLoading(true);
+            try {
+                const token = localStorage.getItem('prts_token');
+                const res = await fetch('/api/v1/reports', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setReports(data);
+                }
+            } catch (e) {
+                console.error("Failed to fetch reports", e);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchReports();
+    }, []);
 
     return (
         <div className="flex flex-col gap-4 pb-6 min-h-full">
@@ -100,10 +122,60 @@ export const ReportManagement: React.FC = () => {
                              </tr>
                          </thead>
                          <tbody className="divide-y divide-ark-border font-mono text-xs">
-                             {mockReports.length > 0 ? (
-                                 mockReports.map(report => (
-                                     <tr key={report.id}>
-                                         {/* Report Row Implementation would go here */}
+                             {isLoading ? (
+                                 <tr>
+                                     <td colSpan={8} className="p-32 text-center">
+                                         <div className="flex flex-col items-center justify-center opacity-50 gap-4 animate-pulse">
+                                             <div className="w-16 h-16 border-2 border-dashed border-ark-primary rounded-lg flex items-center justify-center bg-ark-active/5">
+                                                 <FileText size={32} className="text-ark-primary" />
+                                             </div>
+                                             <span className="text-ark-primary font-mono tracking-widest text-xs">{t('loading', lang)}...</span>
+                                         </div>
+                                     </td>
+                                 </tr>
+                             ) : reports.length > 0 ? (
+                                 reports.map(report => (
+                                     <tr key={report.id} className="hover:bg-ark-active/5 transition-colors group">
+                                         <td className="p-4">
+                                             <div className="flex items-center gap-3">
+                                                 <div className="p-2 bg-ark-active/10 text-ark-primary rounded-sm">
+                                                     <FileText size={16} />
+                                                 </div>
+                                                 <span className="font-bold text-ark-text group-hover:text-ark-primary transition-colors">{report.name}</span>
+                                             </div>
+                                         </td>
+                                         <td className="p-4 text-ark-subtext">{report.module}</td>
+                                         <td className="p-4">
+                                             <span className={`px-2 py-0.5 rounded-sm uppercase text-[10px] font-bold border ${
+                                                 report.type === 'daily' ? 'border-blue-500/30 bg-blue-500/10 text-blue-500' : 
+                                                 report.type === 'weekly' ? 'border-purple-500/30 bg-purple-500/10 text-purple-500' : 
+                                                 'border-orange-500/30 bg-orange-500/10 text-orange-500'
+                                             }`}>
+                                                 {t(`rm_type_${report.type}`, lang)}
+                                             </span>
+                                         </td>
+                                         <td className="p-4 text-ark-subtext">{report.size}</td>
+                                         <td className="p-4">
+                                             <div className="flex items-center gap-2">
+                                                 <div className={`w-1.5 h-1.5 rounded-full ${report.status === 'success' ? 'bg-green-500' : report.status === 'generating' ? 'bg-ark-primary animate-pulse' : 'bg-red-500'}`} />
+                                                 <span className="text-ark-text">{t(`status_${report.status}`, lang)}</span>
+                                             </div>
+                                         </td>
+                                         <td className="p-4 text-ark-subtext">{report.creator}</td>
+                                         <td className="p-4 text-ark-subtext">{report.createTime}</td>
+                                         <td className="p-4">
+                                             <div className="flex items-center justify-center gap-2">
+                                                 <button className="p-1.5 hover:bg-ark-active/20 text-ark-subtext hover:text-ark-primary transition-colors rounded-sm" title={t('rm_op_view', lang)}>
+                                                     <Eye size={14} />
+                                                 </button>
+                                                 <button className="p-1.5 hover:bg-ark-active/20 text-ark-subtext hover:text-ark-primary transition-colors rounded-sm" title={t('rm_op_download', lang)}>
+                                                     <Download size={14} />
+                                                 </button>
+                                                 <button className="p-1.5 hover:bg-ark-danger/20 text-ark-subtext hover:text-ark-danger transition-colors rounded-sm" title={t('mc_delete', lang)}>
+                                                     <Trash2 size={14} />
+                                                 </button>
+                                             </div>
+                                         </td>
                                      </tr>
                                  ))
                              ) : (

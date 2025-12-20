@@ -52,6 +52,16 @@
       .clip-corner-tl-br {
         clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
       }
+
+      /* Hide HTML5 Spinners */
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type=number] {
+        -moz-appearance: textfield;
+      }
     </style>
     <script>
       tailwind.config = {
@@ -97,28 +107,15 @@
               'slide-in-right': 'slide-in-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
               'slide-out-right': 'slide-out-right 0.3s ease-in forwards',
               'ark-modal-in': 'ark-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              'ark-modal-out': 'ark-modal-out 0.2s ease-in forwards'
+              'ark-modal-out': 'ark-modal-out 0.15s ease-in forwards'
             }
           }
         }
       }
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.10.1",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.1",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0"
-  }
-}
-</script>
 </head>
   <body class="bg-ark-bg text-ark-text overflow-hidden transition-colors duration-300">
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
