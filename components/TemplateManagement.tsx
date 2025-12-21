@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { X, ChevronLeft, ChevronRight, Layers, Trash2, Plus } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Layers, Trash2, Plus, RefreshCw } from 'lucide-react';
 import { HoneypotTemplate } from '../types';
+import { useNotification } from './NotificationSystem';
 
 const FilterInput: React.FC<{ label?: string, placeholder?: string, width?: string, children?: React.ReactNode }> = ({ label, placeholder, width = "w-full", children }) => (
     <div className={`flex items-center border border-ark-border bg-ark-panel h-[32px] ${width}`}>
@@ -26,33 +27,58 @@ const FilterSelect: React.FC<{ options: string[] }> = ({ options }) => (
 
 export const TemplateManagement: React.FC = () => {
     const { lang, authFetch } = useApp();
+    const { notify } = useNotification();
     const [templates, setTemplates] = useState<HoneypotTemplate[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
+
+    const fetchTemplates = async () => {
+        setLoading(true);
+        try {
+            const res = await authFetch('/api/v1/templates');
+            if (res.ok) {
+                const data = await res.json();
+                // Map backend model to frontend interface if needed
+                const mapped = data.map((item: any) => ({
+                    id: item.id.toString(),
+                    name: item.name,
+                    refCount: item.ref_count || 0,
+                    ports: item.ports ? item.ports.split(',') : [],
+                    description: item.description
+                }));
+                setTemplates(mapped);
+            }
+        } catch (e) {
+            console.error("Failed to fetch templates", e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchTemplates = async () => {
-            try {
-                const res = await authFetch('/api/v1/templates');
-                if (res.ok) {
-                    const data = await res.json();
-                    // Map backend model to frontend interface if needed
-                    const mapped = data.map((item: any) => ({
-                        id: item.id.toString(),
-                        name: item.name,
-                        refCount: item.ref_count || 0,
-                        ports: item.ports ? item.ports.split(',') : [],
-                        description: item.description
-                    }));
-                    setTemplates(mapped);
-                }
-            } catch (e) {
-                console.error("Failed to fetch templates", e);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchTemplates();
     }, [authFetch]);
+
+    const handleDelete = async (id: string) => {
+        setPendingDeletes(prev => new Set(prev).add(id));
+        try {
+            const res = await authFetch(`/api/v1/templates/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setTemplates(prev => prev.filter(t => t.id !== id));
+                notify('success', t('op_success', lang), 'Template deleted successfully');
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to delete template');
+            }
+        } catch (e) {
+            notify('error', t('op_failed', lang), 'Network error');
+        } finally {
+            setPendingDeletes(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
+    };
 
     return (
         <div className="flex flex-col gap-4 pb-6 min-h-full">
@@ -69,8 +95,13 @@ export const TemplateManagement: React.FC = () => {
                          </FilterInput>
                      </div>
                      <div className="flex gap-2 justify-between xl:justify-start">
-                         <ArkButton variant="ghost" className="h-[32px] px-4 whitespace-nowrap">
-                            <X size={14} className="mr-1" /> {t('filter_reset', lang)}
+                         <ArkButton 
+                            variant="ghost" 
+                            className="h-[32px] px-4 whitespace-nowrap"
+                            onClick={fetchTemplates}
+                            disabled={loading}
+                         >
+                            <RefreshCw size={14} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> {t('refresh', lang)}
                          </ArkButton>
                          
                          <div className="flex-1 xl:flex-none flex justify-end">
@@ -115,10 +146,15 @@ export const TemplateManagement: React.FC = () => {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex items-center justify-center gap-4">
-                                                <button className="text-red-500/80 hover:text-red-500 transition-colors font-bold" title={t('tm_op_expand', lang)}>
+                                                <button className="text-ark-primary hover:text-ark-primary/80 transition-colors font-bold">
                                                     {t('tm_op_expand', lang)}
                                                 </button>
-                                                <button className="text-red-500/80 hover:text-red-500 transition-colors font-bold" title={t('tm_op_delete', lang)}>
+                                                <button 
+                                                    className={`text-red-500/80 hover:text-red-500 transition-colors font-bold flex items-center gap-1 ${pendingDeletes.has(template.id) ? 'opacity-50 cursor-wait' : ''}`}
+                                                    onClick={() => handleDelete(template.id)}
+                                                    disabled={pendingDeletes.has(template.id)}
+                                                >
+                                                    {pendingDeletes.has(template.id) ? <RefreshCw size={12} className="animate-spin" /> : <Trash2 size={12} />}
                                                     {t('tm_op_delete', lang)}
                                                 </button>
                                             </div>

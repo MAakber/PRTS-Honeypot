@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ArkCard, ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { Inbox, ChevronRight, Calendar, Download, Upload, FileText, Activity, Globe, Plus, Box } from 'lucide-react';
+import { Inbox, ChevronRight, Calendar, Download, Upload, FileText, Activity, Globe, Plus, Box, RefreshCw } from 'lucide-react';
 import { ArkDateRangePicker } from './ArkDateRangePicker';
 import { useNotification } from './NotificationSystem';
 
@@ -49,6 +49,8 @@ export const CompromisePerception: React.FC = () => {
     const [dateRange, setDateRange] = useState({ start: '2025-11-06T00:00', end: '2025-12-05T23:59' });
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pendingDeploys, setPendingDeploys] = useState<Set<number>>(new Set());
+    const [pendingDownloads, setPendingDownloads] = useState<Set<number>>(new Set());
 
     const fetchLogs = async () => {
         setLoading(true);
@@ -74,12 +76,44 @@ export const CompromisePerception: React.FC = () => {
         return 'text-ark-subtext bg-ark-subtext/10 border-ark-subtext/30';
     };
 
-    const handleDeploy = (name: string) => {
-        notify('success', t('op_success', lang), `${t('op_deploy_success', lang)}: ${name}`);
+    const handleDeploy = async (template: any) => {
+        if (pendingDeploys.has(template.id)) return;
+        setPendingDeploys(prev => new Set(prev).add(template.id));
+        try {
+            const response = await authFetch('/api/v1/decoys', {
+                method: 'POST',
+                body: JSON.stringify({ name: template.name, type: template.type })
+            });
+            if (response.ok) {
+                notify('success', t('op_success', lang), `${t('op_deploy_success', lang)}: ${template.name}`);
+                fetchLogs(); // Refresh logs to show new decoy
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to deploy decoy');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingDeploys(prev => {
+                const next = new Set(prev);
+                next.delete(template.id);
+                return next;
+            });
+        }
     };
 
-    const handleDownload = (name: string) => {
-        notify('success', t('op_success', lang), `${t('op_download_start', lang)}: ${name}`);
+    const handleDownload = async (template: any) => {
+        if (pendingDownloads.has(template.id)) return;
+        setPendingDownloads(prev => new Set(prev).add(template.id));
+        
+        try {
+            notify('success', t('op_success', lang), `${t('op_download_start', lang)}: ${template.name}`);
+        } finally {
+            setPendingDownloads(prev => {
+                const next = new Set(prev);
+                next.delete(template.id);
+                return next;
+            });
+        }
     };
 
     const handleToggle = () => {
@@ -277,7 +311,7 @@ export const CompromisePerception: React.FC = () => {
                  <div className="flex-1 overflow-auto custom-scrollbar p-1">
                      <div className="flex items-center justify-between mb-4">
                          <h3 className="text-lg font-bold text-ark-text">{t('cp_mgmt_title', lang)}</h3>
-                         <ArkButton variant="primary" size="sm" onClick={() => handleDeploy('New Custom Decoy')}>
+                         <ArkButton variant="primary" size="sm" onClick={() => handleDeploy({ id: 0, name: 'New Custom Decoy', type: 'custom' })}>
                              <Plus size={16} className="mr-1" /> {t('cp_btn_create', lang)}
                          </ArkButton>
                      </div>
@@ -297,17 +331,28 @@ export const CompromisePerception: React.FC = () => {
                                          <p className="text-xs text-ark-subtext font-mono mb-4 min-h-[32px]">{decoy.desc}</p>
                                          <div className="flex gap-2 justify-end">
                                              <button 
-                                                onClick={() => handleDownload(decoy.name)}
-                                                className="p-1.5 text-ark-subtext hover:text-ark-primary hover:bg-ark-active/10 rounded-sm transition-colors border border-transparent hover:border-ark-border"
+                                                onClick={() => handleDownload(decoy)}
+                                                className={`p-1.5 text-ark-subtext hover:text-ark-primary hover:bg-ark-active/10 rounded-sm transition-colors border border-transparent hover:border-ark-border ${pendingDownloads.has(decoy.id) ? 'opacity-50 cursor-wait' : ''}`}
                                                 title={t('cp_btn_download', lang)}
+                                                disabled={pendingDownloads.has(decoy.id)}
                                              >
-                                                 <Download size={16} />
+                                                 {pendingDownloads.has(decoy.id) ? (
+                                                     <RefreshCw size={16} className="animate-spin" />
+                                                 ) : (
+                                                     <Download size={16} />
+                                                 )}
                                              </button>
                                              <button 
-                                                onClick={() => handleDeploy(decoy.name)}
-                                                className="flex items-center gap-1 px-3 py-1.5 bg-ark-active/20 text-ark-primary hover:bg-ark-primary hover:text-white transition-colors text-xs font-bold uppercase rounded-sm border border-ark-primary/30"
+                                                onClick={() => handleDeploy(decoy)}
+                                                className={`flex items-center gap-1 px-3 py-1.5 bg-ark-active/20 text-ark-primary hover:bg-ark-primary hover:text-white transition-colors text-xs font-bold uppercase rounded-sm border border-ark-primary/30 ${pendingDeploys.has(decoy.id) ? 'opacity-50 cursor-wait' : ''}`}
+                                                disabled={pendingDeploys.has(decoy.id)}
                                              >
-                                                 <Upload size={14} /> {t('cp_btn_deploy', lang)}
+                                                 {pendingDeploys.has(decoy.id) ? (
+                                                     <RefreshCw size={14} className="animate-spin" />
+                                                 ) : (
+                                                     <Upload size={14} />
+                                                 )}
+                                                 {t('cp_btn_deploy', lang)}
                                              </button>
                                          </div>
                                      </div>

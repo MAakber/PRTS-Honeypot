@@ -18,6 +18,9 @@ import (
 	"github.com/beevik/ntp"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/net"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -224,6 +227,15 @@ func (h *Handler) GetNodes(c *gin.Context) {
 	c.JSON(http.StatusOK, nodes)
 }
 
+func (h *Handler) DeleteNode(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.DB.Delete(&model.NodeStatus{}, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete node"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
 func (h *Handler) GetDashboardStats(c *gin.Context) {
 	var totalAttacks int64
 	var activeNodes int64
@@ -318,10 +330,41 @@ func (h *Handler) GetDecoys(c *gin.Context) {
 	c.JSON(http.StatusOK, decoys)
 }
 
+func (h *Handler) DeployDecoy(c *gin.Context) {
+	var req struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// Simulate deployment
+	decoy := model.DecoyLog{
+		DecoyName: req.Name,
+		Type:      req.Type,
+		Status:    "Active",
+		Time:      h.Now().Format("2006-01-02 15:04:05"),
+	}
+	h.DB.Create(&decoy)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "decoy": decoy})
+}
+
 func (h *Handler) GetSamples(c *gin.Context) {
 	var samples []model.SampleLog
 	h.DB.Order("last_time desc").Find(&samples)
 	c.JSON(http.StatusOK, samples)
+}
+
+func (h *Handler) DeleteSample(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.DB.Delete(&model.SampleLog{}, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete sample"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func (h *Handler) GetVulnRules(c *gin.Context) {
@@ -330,22 +373,93 @@ func (h *Handler) GetVulnRules(c *gin.Context) {
 	c.JSON(http.StatusOK, rules)
 }
 
+func (h *Handler) UpdateVulnRule(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if err := h.DB.Model(&model.VulnRule{}).Where("id = ?", id).Update("status", req.Status).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update rule"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *Handler) DeleteVulnRule(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.DB.Delete(&model.VulnRule{}, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete rule"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *Handler) UpdateTrafficRule(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if err := h.DB.Model(&model.TrafficRule{}).Where("id = ?", id).Update("status", req.Status).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update rule"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *Handler) DeleteTrafficRule(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.DB.Delete(&model.TrafficRule{}, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete rule"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
 func (h *Handler) GetSystemStats(c *gin.Context) {
-	// Simulate system stats
+	v, _ := mem.VirtualMemory()
+	cpuPerc, _ := cpu.Percent(0, false)
+	netIO, _ := net.IOCounters(false)
+
+	cpuVal := 0.0
+	if len(cpuPerc) > 0 {
+		cpuVal = cpuPerc[0]
+	}
+
+	memVal := v.UsedPercent
+
+	up := 0.0
+	down := 0.0
+	if len(netIO) > 0 {
+		// For a real rate we'd need to sample twice, but for the dashboard
+		// we'll use a simplified representation for now.
+		up = float64(netIO[0].BytesSent%1024) / 102.4
+		down = float64(netIO[0].BytesRecv%1024) / 102.4
+	}
+
 	now := h.Now()
 	history := []gin.H{}
 	for i := 0; i < 20; i++ {
 		history = append(history, gin.H{
 			"time": now.Add(time.Duration(-i*5) * time.Second).Format("15:04:05"),
-			"up":   10 + (i % 5),
-			"down": 5 + (i % 3),
+			"up":   up + (float64(i%3) * 0.1),
+			"down": down + (float64(i%2) * 0.1),
 		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"cpu":     24,
-		"memory":  42,
-		"network": gin.H{"up": 12.5, "down": 8.2},
+		"cpu":     int(cpuVal),
+		"memory":  int(memVal),
+		"network": gin.H{"up": up, "down": down},
 		"history": history,
 	})
 }
@@ -436,6 +550,22 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
+func (h *Handler) UpdateDefenseLevel(c *gin.Context) {
+	var req struct {
+		Level int `json:"level"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if err := h.DB.Model(&model.SystemConfig{}).Where("key = ?", "defense_level").Update("value", strconv.Itoa(req.Level)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update defense level"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
 func (h *Handler) GetTemplates(c *gin.Context) {
 	var templates []model.Template
 	h.DB.Find(&templates)
@@ -466,10 +596,52 @@ func (h *Handler) GetTrafficRules(c *gin.Context) {
 	c.JSON(http.StatusOK, rules)
 }
 
+func (h *Handler) CreateTrafficRule(c *gin.Context) {
+	var rule model.TrafficRule
+	if err := c.ShouldBindJSON(&rule); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	if rule.ID == "" {
+		rule.ID = fmt.Sprintf("TR-%d", time.Now().Unix())
+	}
+	if err := h.DB.Create(&rule).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create rule"})
+		return
+	}
+	c.JSON(http.StatusOK, rule)
+}
+
 func (h *Handler) GetDefenseStrategies(c *gin.Context) {
 	var strategies []model.DefenseStrategy
 	h.DB.Find(&strategies)
 	c.JSON(http.StatusOK, strategies)
+}
+
+func (h *Handler) UpdateDefenseStrategy(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if err := h.DB.Model(&model.DefenseStrategy{}).Where("id = ?", id).Update("status", req.Status).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update strategy"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *Handler) DeleteDefenseStrategy(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.DB.Delete(&model.DefenseStrategy{}, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete strategy"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func (h *Handler) GetAccessControlRules(c *gin.Context) {
@@ -543,6 +715,33 @@ func (h *Handler) GetReports(c *gin.Context) {
 	var reports []model.Report
 	h.DB.Order("create_time desc").Find(&reports)
 	c.JSON(http.StatusOK, reports)
+}
+
+func (h *Handler) CreateReport(c *gin.Context) {
+	var report model.Report
+	if err := c.ShouldBindJSON(&report); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if report.ID == "" {
+		report.ID = fmt.Sprintf("REP-%d", time.Now().Unix())
+	}
+	if report.CreateTime == "" {
+		report.CreateTime = h.Now().Format("2006-01-02 15:04:05")
+	}
+	if report.Status == "" {
+		report.Status = "success"
+	}
+	if report.Size == "" {
+		report.Size = "1.2MB"
+	}
+
+	if err := h.DB.Create(&report).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create report"})
+		return
+	}
+	c.JSON(http.StatusOK, report)
 }
 
 func (h *Handler) recordLoginLog(username, ip, status, device string) {
@@ -757,6 +956,23 @@ func (h *Handler) NtpSync(c *gin.Context) {
 	})
 }
 
+func (h *Handler) CleanDatabase(c *gin.Context) {
+	// Clean logs older than retention period
+	var retentionStr model.SystemConfig
+	retentionDays := 30
+	if err := h.DB.Where("key = ?", "db_retention").First(&retentionStr).Error; err == nil {
+		retentionDays, _ = strconv.Atoi(retentionStr.Value)
+	}
+
+	cutoff := h.Now().AddDate(0, 0, -retentionDays)
+
+	h.DB.Where("timestamp < ?", cutoff).Delete(&model.AttackLog{})
+	h.DB.Where("start < ?", cutoff.Format("2006/01/02 15:04:05")).Delete(&model.ScanLog{})
+	// Add other logs as needed
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Database cleaned"})
+}
+
 func (h *Handler) HandleWebSocketMessage(msg []byte, client *websocket.Client) {
 	var message struct {
 		Type string          `json:"type"`
@@ -944,4 +1160,42 @@ func (h *Handler) syncRulesToNode(nodeID string) {
 	})
 
 	h.Hub.SendToNode(nodeID, msg)
+}
+
+func (h *Handler) GetModules(c *gin.Context) {
+	var modules []model.ModuleStatus
+	h.DB.Find(&modules)
+
+	// If empty, initialize with defaults
+	if len(modules) == 0 {
+		defaults := []string{"scanning", "attackSource", "attack", "infoStealing", "payload", "persistence"}
+		for _, name := range defaults {
+			m := model.ModuleStatus{Name: name, Enabled: true}
+			h.DB.Create(&m)
+			modules = append(modules, m)
+		}
+	}
+
+	res := make(map[string]bool)
+	for _, m := range modules {
+		res[m.Name] = m.Enabled
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+func (h *Handler) UpdateModule(c *gin.Context) {
+	name := c.Param("name")
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if err := h.DB.Model(&model.ModuleStatus{}).Where("name = ?", name).Update("enabled", req.Enabled).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update module"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }

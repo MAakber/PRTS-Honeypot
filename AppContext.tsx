@@ -63,11 +63,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [modules, setModules] = useState<ModuleState>({
       attackSource: true,
       scanning: true,
-      attack: true, // Intrusion Attack (List)
-      infoStealing: true, // Account Resources
-      payload: true, // Sample Detection
-      persistence: true, // Compromise Perception
+      attack: true,
+      infoStealing: true,
+      payload: true,
+      persistence: true,
   });
+
+  const fetchModules = async () => {
+    try {
+      const res = await authFetch('/api/v1/modules');
+      if (res.ok) {
+        const data = await res.json();
+        setModules(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch modules", e);
+    }
+  };
 
   const [attacks, setAttacks] = useState<AttackLog[]>([]);
   const [loginPolicy, setLoginPolicy] = useState<{ url: string } | null>(null);
@@ -130,6 +142,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (user) {
       const fetchData = async () => {
         try {
+          fetchModules();
           const [msgRes, attackRes] = await Promise.all([
             authFetch('/api/v1/messages'),
             authFetch('/api/v1/attacks')
@@ -247,8 +260,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
-  const toggleModule = (key: keyof ModuleState) => {
-      setModules(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleModule = async (key: keyof ModuleState) => {
+    const newState = !modules[key];
+    try {
+      const res = await authFetch(`/api/v1/modules/${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: newState })
+      });
+      if (res.ok) {
+        setModules(prev => ({ ...prev, [key]: newState }));
+        return true;
+      }
+    } catch (e) {
+      console.error("Failed to toggle module", e);
+    }
+    return false;
   };
 
   // Update messages when lang changes
@@ -325,10 +352,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const res = await authFetch(`/api/v1/messages/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setMessages(prev => prev.filter(msg => msg.id !== id));
+        return true;
       }
     } catch (e) {
       console.error("Failed to delete message", e);
     }
+    return false;
   };
 
   const toggleRead = (id: string) => {

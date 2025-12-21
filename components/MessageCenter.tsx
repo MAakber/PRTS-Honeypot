@@ -4,13 +4,15 @@ import React, { useState } from 'react';
 import { ArkCard, ArkButton, ArkPageHeader } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { Bell, Info, AlertTriangle, Trash2, MailOpen, FileText } from 'lucide-react';
+import { Bell, Info, AlertTriangle, Trash2, MailOpen, FileText, RefreshCw } from 'lucide-react';
 import { useNotification } from './NotificationSystem';
 
 export const MessageCenter: React.FC = () => {
     const { lang, messages, markAllRead, deleteMessage, toggleRead } = useApp();
     const { notify } = useNotification();
     const [filter, setFilter] = useState<'all' | 'unread' | 'system' | 'security'>('all');
+    const [pendingMessages, setPendingMessages] = useState<Set<string>>(new Set());
+    const [isMarkingAll, setIsMarkingAll] = useState(false);
 
     const filteredMessages = messages.filter(msg => {
         if (filter === 'all') return true;
@@ -26,9 +28,27 @@ export const MessageCenter: React.FC = () => {
         }
     };
 
-    const handleDelete = (id: string) => {
-        deleteMessage(id);
-        notify('success', t('op_success', lang), t('op_item_deleted', lang));
+    const handleDelete = async (id: string) => {
+        if (pendingMessages.has(id)) return;
+        setPendingMessages(prev => new Set(prev).add(id));
+        const success = await deleteMessage(id);
+        if (success) {
+            notify('success', t('op_success', lang), t('op_item_deleted', lang));
+        } else {
+            notify('error', t('op_failed', lang), 'Failed to delete message');
+        }
+        setPendingMessages(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+    };
+
+    const handleMarkAllRead = async () => {
+        if (isMarkingAll) return;
+        setIsMarkingAll(true);
+        await markAllRead();
+        setIsMarkingAll(false);
     };
 
     return (
@@ -38,7 +58,7 @@ export const MessageCenter: React.FC = () => {
                 title={t('mc_title', lang)} 
                 subtitle={t('mc_subtitle', lang)}
                 extra={
-                    <ArkButton variant="ghost" size="sm" onClick={markAllRead}>
+                    <ArkButton variant="ghost" size="sm" onClick={handleMarkAllRead} loading={isMarkingAll}>
                         <MailOpen size={14} className="mr-2" /> {t('mc_mark_all_read', lang)}
                     </ArkButton>
                 }
@@ -109,9 +129,15 @@ export const MessageCenter: React.FC = () => {
                                             </button>
                                             <button 
                                                 onClick={() => handleDelete(msg.id)}
-                                                className="text-ark-subtext hover:text-ark-danger transition-colors flex items-center gap-1 text-xs"
+                                                className={`text-ark-subtext hover:text-ark-danger transition-colors flex items-center gap-1 text-xs ${pendingMessages.has(msg.id) ? 'opacity-50 cursor-wait' : ''}`}
+                                                disabled={pendingMessages.has(msg.id)}
                                             >
-                                                <Trash2 size={14} /> {t('mc_delete', lang)}
+                                                {pendingMessages.has(msg.id) ? (
+                                                    <RefreshCw size={14} className="animate-spin" />
+                                                ) : (
+                                                    <Trash2 size={14} />
+                                                )}
+                                                {t('mc_delete', lang)}
                                             </button>
                                         </div>
                                     </div>

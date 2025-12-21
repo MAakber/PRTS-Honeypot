@@ -93,6 +93,7 @@ export const SampleDetection: React.FC = () => {
     const [dateRange, setDateRange] = useState({ start: '2025-11-07T00:00', end: '2025-12-06T23:59' });
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pendingSamples, setPendingSamples] = useState<Set<string>>(new Set());
 
     const fetchLogs = async () => {
         setLoading(true);
@@ -115,7 +116,29 @@ export const SampleDetection: React.FC = () => {
 
     const handleAnalysis = () => notify('info', t('op_success', lang), t('op_analysis_start', lang));
     const handleDownload = () => notify('success', t('op_success', lang), t('op_download_start', lang));
-    const handleDelete = () => notify('error', t('op_success', lang), t('op_item_deleted', lang));
+    const handleDelete = async (id: string) => {
+        if (pendingSamples.has(id)) return;
+        setPendingSamples(prev => new Set(prev).add(id));
+        try {
+            const response = await authFetch(`/api/v1/samples/${id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                setLogs(prev => prev.filter(log => log.id !== id));
+                notify('error', t('op_success', lang), t('op_item_deleted', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to delete sample');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingSamples(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
+    };
 
     const handleToggle = () => {
         const newState = !enabled;
@@ -304,8 +327,17 @@ export const SampleDetection: React.FC = () => {
                                                         <button onClick={handleDownload} className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('cp_btn_download', lang)}>
                                                             <Download size={16} />
                                                         </button>
-                                                        <button onClick={handleDelete} className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('mc_delete', lang)}>
-                                                            <Trash2 size={16} />
+                                                        <button 
+                                                            onClick={() => handleDelete(log.id)} 
+                                                            className={`text-ark-subtext hover:text-ark-danger transition-colors ${pendingSamples.has(log.id) ? 'opacity-50 cursor-wait' : ''}`}
+                                                            title={t('mc_delete', lang)}
+                                                            disabled={pendingSamples.has(log.id)}
+                                                        >
+                                                            {pendingSamples.has(log.id) ? (
+                                                                <RefreshCw size={16} className="animate-spin" />
+                                                            ) : (
+                                                                <Trash2 size={16} />
+                                                            )}
                                                         </button>
                                                     </div>
                                                 </td>

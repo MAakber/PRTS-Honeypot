@@ -112,6 +112,28 @@ export const DefenseLevel: React.FC = () => {
     const [isClosing, setIsClosing] = useState(false);
     const [isActivating, setIsActivating] = useState(false);
 
+    useEffect(() => {
+        const fetchLevel = async () => {
+            try {
+                const token = localStorage.getItem('prts_token');
+                const res = await fetch('/api/v1/config', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.defense_level) {
+                        const lvl = parseInt(data.defense_level) as Level;
+                        setCurrentLevel(lvl);
+                        setSelectedLevel(lvl);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch defense level", e);
+            }
+        };
+        fetchLevel();
+    }, []);
+
     const config = LEVEL_CONFIGS[selectedLevel];
     const isCurrent = currentLevel === selectedLevel;
 
@@ -129,16 +151,36 @@ export const DefenseLevel: React.FC = () => {
         }, 200);
     };
 
-    const confirmActivation = () => {
+    const confirmActivation = async () => {
         setIsActivating(true);
-        // Delay to show animation (2s to allow progress bar to fill)
-        setTimeout(() => {
-            setCurrentLevel(selectedLevel);
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch('/api/v1/system/defense-level', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ level: selectedLevel })
+            });
+
+            if (response.ok) {
+                // Delay to show animation (2s to allow progress bar to fill)
+                setTimeout(() => {
+                    setCurrentLevel(selectedLevel);
+                    setIsActivating(false);
+                    handleClose();
+                    const msg = selectedLevel === 3 ? t('dl_crisis_msg', lang) : t('dl_success_msg', lang);
+                    notify(selectedLevel >= 2 ? 'warning' : 'success', t('op_success', lang), msg);
+                }, 2000);
+            } else {
+                setIsActivating(false);
+                notify('error', t('op_failed', lang), 'Failed to update defense level');
+            }
+        } catch (error) {
             setIsActivating(false);
-            handleClose();
-            const msg = selectedLevel === 3 ? t('dl_crisis_msg', lang) : t('dl_success_msg', lang);
-            notify(selectedLevel >= 2 ? 'warning' : 'success', t('op_success', lang), msg);
-        }, 2000);
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        }
     };
 
     const getLevelDisplay = (lvl: Level) => {

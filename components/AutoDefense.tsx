@@ -5,17 +5,17 @@ import { ArkPageHeader, ArkButton, ArkInput } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
 // Fixed: Added ChevronRight to the import list
-import { ShieldCheck, Zap, ArrowRight, Settings, Plus, Edit, Trash2, X, Save, ChevronRight, Clock, AlertTriangle, Hash, Shield } from 'lucide-react';
+import { ShieldCheck, Zap, ArrowRight, Settings, Plus, Edit, Trash2, X, Save, ChevronRight, Clock, AlertTriangle, Hash, Shield, RefreshCw } from 'lucide-react';
 import { DefenseStrategy } from '../types';
 import { useNotification } from './NotificationSystem';
 import { authFetch } from '../services/aiService';
 
-const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ checked, onChange }) => (
+const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void, loading?: boolean }> = ({ checked, onChange, loading }) => (
     <div
-        onClick={(e) => { e.stopPropagation(); onChange(); }}
-        className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors duration-300 ${checked ? 'bg-ark-primary' : 'bg-ark-subtext/30'}`}
+        onClick={(e) => { e.stopPropagation(); if (!loading) onChange(); }}
+        className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors duration-300 ${checked ? 'bg-ark-primary' : 'bg-ark-subtext/30'} ${loading ? 'opacity-50 cursor-wait' : ''}`}
     >
-        <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+        <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${checked ? 'translate-x-5' : 'translate-x-0'} ${loading ? 'animate-pulse' : ''}`} />
     </div>
 );
 
@@ -32,6 +32,7 @@ export const AutoDefense: React.FC = () => {
     const [isModalVisible, setIsModalVisible] = useState(false); // 控制DOM是否挂载
     const [isClosing, setIsClosing] = useState(false); // 控制退出动画
     const [editingStrategy, setEditingStrategy] = useState<DefenseStrategy | null>(null);
+    const [pendingStrategies, setPendingStrategies] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         fetchStrategies();
@@ -113,16 +114,33 @@ export const AutoDefense: React.FC = () => {
         return { trigger: triggerStr, action: actionStr };
     };
 
-    const toggleStrategy = (id: string) => {
-        setStrategies(prev => prev.map(s => {
-            if (s.id === id) {
-                const newStatus = s.status === 'active' ? 'inactive' : 'active';
+    const toggleStrategy = async (id: string) => {
+        const strategy = strategies.find(s => s.id === id);
+        if (!strategy || pendingStrategies.has(id)) return;
+
+        const newStatus = strategy.status === 'active' ? 'inactive' : 'active';
+        setPendingStrategies(prev => new Set(prev).add(id));
+        try {
+            const response = await authFetch(`/api/v1/defense-strategies/${id}`, {
+                method: 'POST',
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (response.ok) {
+                setStrategies(prev => prev.map(s => s.id === id ? { ...s, status: newStatus as 'active' | 'inactive' } : s));
                 const statusLabel = newStatus === 'active' ? t('status_active_state', lang) : t('status_inactive_state', lang);
-                notify(newStatus === 'active' ? 'success' : 'warning', t('op_success', lang), `${s.name}: ${statusLabel}`);
-                return { ...s, status: newStatus as 'active' | 'inactive' };
+                notify(newStatus === 'active' ? 'success' : 'warning', t('op_success', lang), `${strategy.name}: ${statusLabel}`);
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to update strategy status');
             }
-            return s;
-        }));
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingStrategies(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
     const handleOpenModal = (strategy?: DefenseStrategy) => {
@@ -183,9 +201,28 @@ export const AutoDefense: React.FC = () => {
         handleCloseModal();
     };
 
-    const handleDelete = (id: string) => {
-        setStrategies(prev => prev.filter(s => s.id !== id));
-        notify('error', t('op_success', lang), t('op_strategy_deleted', lang));
+    const handleDelete = async (id: string) => {
+        if (pendingStrategies.has(id)) return;
+        setPendingStrategies(prev => new Set(prev).add(id));
+        try {
+            const response = await authFetch(`/api/v1/defense-strategies/${id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                setStrategies(prev => prev.filter(s => s.id !== id));
+                notify('error', t('op_success', lang), t('op_strategy_deleted', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to delete strategy');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingStrategies(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
     return (
@@ -222,7 +259,11 @@ export const AutoDefense: React.FC = () => {
                                             <h4 className="font-bold text-ark-text">{strategy.name}</h4>
                                             <p className="text-[10px] text-ark-subtext font-mono mt-1">{strategy.id}</p>
                                         </div>
-                                        <ToggleSwitch checked={strategy.status === 'active'} onChange={() => toggleStrategy(strategy.id)} />
+                                        <ToggleSwitch 
+                                            checked={strategy.status === 'active'} 
+                                            onChange={() => toggleStrategy(strategy.id)} 
+                                            loading={pendingStrategies.has(strategy.id)}
+                                        />
                                     </div>
 
                                     <div className="p-4 flex-1 flex flex-col gap-4">
@@ -244,7 +285,17 @@ export const AutoDefense: React.FC = () => {
                                         <span className="text-ark-subtext">{t('tf_hits', lang)}: <span className="text-ark-text font-bold">{strategy.hitCount}</span></span>
                                         <div className="flex items-center gap-2">
                                             <button onClick={() => handleOpenModal(strategy)} className="p-1.5 hover:bg-ark-active/20 rounded-sm text-ark-subtext hover:text-ark-primary transition-colors"><Edit size={14} /></button>
-                                            <button onClick={() => handleDelete(strategy.id)} className="p-1.5 hover:bg-ark-danger/20 rounded-sm text-ark-subtext hover:text-ark-danger transition-colors"><Trash2 size={14} /></button>
+                                            <button 
+                                                onClick={() => handleDelete(strategy.id)} 
+                                                className={`p-1.5 hover:bg-ark-danger/20 rounded-sm text-ark-subtext hover:text-ark-danger transition-colors ${pendingStrategies.has(strategy.id) ? 'opacity-50 cursor-wait' : ''}`}
+                                                disabled={pendingStrategies.has(strategy.id)}
+                                            >
+                                                {pendingStrategies.has(strategy.id) ? (
+                                                    <RefreshCw size={14} className="animate-spin" />
+                                                ) : (
+                                                    <Trash2 size={14} />
+                                                )}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

@@ -1,15 +1,19 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,8 +21,18 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
-	"github.com/shirou/gopsutil/v3/net"
+	psnet "github.com/shirou/gopsutil/v3/net"
 )
+
+//go:embed assets/*
+var assetsFS embed.FS
+
+var binPath = `C:\ProgramData\PRTS\bin`
+
+type SensorData struct {
+	Name  string  `json:"Name"`
+	Value float64 `json:"Value"`
+}
 
 type NodeStatus struct {
 	ID             string  `json:"id"`
@@ -81,7 +95,7 @@ func main() {
 	log.SetFlags(0)
 
 	lastTime = time.Now()
-	currentNet, _ := net.IOCounters(false)
+	currentNet, _ := psnet.IOCounters(false)
 	if len(currentNet) > 0 {
 		lastBytesSent = currentNet[0].BytesSent
 		lastBytesRecv = currentNet[0].BytesRecv
@@ -237,6 +251,112 @@ func main() {
 	}
 }
 
+func normalizeWindowsTemp(raw float64) float64 {
+	// Handle common Windows sensor encodings
+	if raw > 2000 {
+		return (raw / 10.0) - 273.15 // Kelvin *10
+	}
+	if raw > 200 {
+		return raw - 273.15 // Kelvin
+	}
+	return raw // Already Celsius
+}
+
+func parseFirstFloat(out string) (float64, bool) {
+	fields := strings.Fields(out)
+	for _, f := range fields {
+		if v, err := strconv.ParseFloat(f, 64); err == nil {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
+func deployAssets() error {
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		os.MkdirAll(binPath, 0755)
+	}
+
+	files := []string{"LibreHardwareMonitorLib.dll"}
+	for _, name := range files {
+		target := filepath.Join(binPath, name)
+		data, err := assetsFS.ReadFile("assets/" + name)
+		if err != nil {
+			continue
+		}
+
+		info, err := os.Stat(target)
+		if os.IsNotExist(err) || info.Size() != int64(len(data)) {
+			if err := os.WriteFile(target, data, 0755); err != nil {
+				log.Printf("Failed to deploy %s: %v", name, err)
+			} else {
+				log.Printf("Deployed %s to %s", name, target)
+			}
+		}
+	}
+	return nil
+}
+
+func getWindowsTemperature() float64 {
+	// 1. 确保 DLL 已部署
+	deployAssets()
+
+	// 2. 直接通过 PowerShell 加载 DLL 获取温度 (无需 EXE)
+	dllPath := filepath.Join(binPath, "LibreHardwareMonitorLib.dll")
+	if _, err := os.Stat(dllPath); err == nil {
+		// 这是一个高效的 PowerShell 脚本，直接操作 DLL 对象
+		psCmd := fmt.Sprintf(`$ErrorActionPreference = 'SilentlyContinue'; Add-Type -Path '%s'; $pc = New-Object LibreHardwareMonitor.Hardware.Computer; $pc.IsCpuEnabled = $true; $pc.Open(); $t = 0; foreach($hw in $pc.Hardware){$hw.Update(); foreach($s in $hw.Sensors){if($s.SensorType -eq 'Temperature' -and $s.Value -and ($s.Name -like '*Package*' -or $t -eq 0)){$t = $s.Value}}}; $pc.Close(); $t`, dllPath)
+
+		output, err := exec.Command("powershell", "-Command", psCmd).Output()
+		if err == nil {
+			if val, ok := parseFirstFloat(strings.TrimSpace(string(output))); ok && val > 0 {
+				return val
+			}
+		}
+	}
+
+	// 3. 如果 DLL 不存在或失败，回退到 WMI
+	return getFallbackTemperature()
+}
+
+func getFallbackTemperature() float64 {
+	// Try multiple WMI / performance counter sources in order
+	sources := []struct {
+		name  string
+		psCmd string
+	}{
+		{
+			name:  "MSAcpi_ThermalZoneTemperature",
+			psCmd: "Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CurrentTemperature",
+		},
+		{
+			name:  "Win32_PerfFormattedData_Counters_ThermalZoneInformation",
+			psCmd: "Get-WmiObject -Query 'SELECT * FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty HighPrecisionTemperature",
+		},
+		{
+			name:  "ThermalZone Get-Counter",
+			psCmd: "Get-Counter '\\Thermal Zone Information(*)\\Temperature' | Select-Object -ExpandProperty CounterSamples | Select-Object -ExpandProperty CookedValue",
+		},
+	}
+
+	for _, src := range sources {
+		output, err := exec.Command("powershell", "-Command", src.psCmd).Output()
+		if err != nil {
+			continue
+		}
+		val, ok := parseFirstFloat(strings.TrimSpace(string(output)))
+		if !ok {
+			continue
+		}
+		temp := normalizeWindowsTemp(val)
+		if temp > 0 {
+			return temp
+		}
+	}
+
+	return 0
+}
+
 func collectStatus() NodeStatus {
 	v, _ := mem.VirtualMemory()
 	c, _ := cpu.Percent(0, false)
@@ -248,12 +368,17 @@ func collectStatus() NodeStatus {
 	ifaceName := "unknown"
 	if ifaces, err := net.Interfaces(); err == nil {
 		for _, i := range ifaces {
-			if len(i.Addrs) > 0 {
-				for _, addr := range i.Addrs {
+			addrs, _ := i.Addrs()
+			if len(addrs) > 0 {
+				for _, addr := range addrs {
+					addrStr := addr.String()
+					if idx := strings.Index(addrStr, "/"); idx != -1 {
+						addrStr = addrStr[:idx]
+					}
 					// Prefer IPv4
-					if !strings.Contains(addr.Addr, ":") && addr.Addr != "127.0.0.1" {
-						ip = addr.Addr
-						mac = i.HardwareAddr
+					if !strings.Contains(addrStr, ":") && addrStr != "127.0.0.1" {
+						ip = addrStr
+						mac = i.HardwareAddr.String()
 						ifaceName = i.Name
 						break
 					}
@@ -266,11 +391,16 @@ func collectStatus() NodeStatus {
 		// Fallback to IPv6 if no IPv4 found
 		if ip == "127.0.0.1" {
 			for _, i := range ifaces {
-				if len(i.Addrs) > 0 {
-					for _, addr := range i.Addrs {
-						if addr.Addr != "127.0.0.1" && addr.Addr != "::1" {
-							ip = addr.Addr
-							mac = i.HardwareAddr
+				addrs, _ := i.Addrs()
+				if len(addrs) > 0 {
+					for _, addr := range addrs {
+						addrStr := addr.String()
+						if idx := strings.Index(addrStr, "/"); idx != -1 {
+							addrStr = addrStr[:idx]
+						}
+						if addrStr != "127.0.0.1" && addrStr != "::1" {
+							ip = addrStr
+							mac = i.HardwareAddr.String()
 							ifaceName = i.Name
 							break
 						}
@@ -292,22 +422,21 @@ func collectStatus() NodeStatus {
 
 	// Get Temperature
 	temp := 0.0
-	if temps, err := host.SensorsTemperatures(); err == nil && len(temps) > 0 {
-		// Try to find a CPU package temperature or just take the first one
-		for _, t := range temps {
-			if t.SensorKey == "coretemp_package_id_0" || t.SensorKey == "cpu_thermal" {
-				temp = t.Temperature
-				break
+	if runtime.GOOS == "windows" {
+		temp = getWindowsTemperature()
+	} else {
+		if temps, err := host.SensorsTemperatures(); err == nil && len(temps) > 0 {
+			// Try to find a CPU package temperature or just take the first one
+			for _, t := range temps {
+				if t.SensorKey == "coretemp_package_id_0" || t.SensorKey == "cpu_thermal" {
+					temp = t.Temperature
+					break
+				}
+			}
+			if temp == 0 {
+				temp = temps[0].Temperature
 			}
 		}
-		if temp == 0 {
-			temp = temps[0].Temperature
-		}
-	}
-	// Fallback for Windows/Environments where sensors are not available
-	if temp == 0 {
-		// Simulate a realistic temperature based on load if no sensor found
-		temp = 35.0 + (float64(load) * 0.4) + (float64(time.Now().Unix()%10) / 10.0)
 	}
 
 	// Maintain load history for sparkline
@@ -320,7 +449,7 @@ func collectStatus() NodeStatus {
 	var netUp, netDown float64
 	now := time.Now()
 	duration := now.Sub(lastTime).Seconds()
-	currentNet, _ := net.IOCounters(false)
+	currentNet, _ := psnet.IOCounters(false)
 	if len(currentNet) > 0 && duration > 0 {
 		sent := currentNet[0].BytesSent
 		recv := currentNet[0].BytesRecv

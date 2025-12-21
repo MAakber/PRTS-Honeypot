@@ -52,6 +52,7 @@ export const SystemConfig: React.FC = () => {
     const [activeTab, setActiveTab] = useState('intel');
     const [isSaving, setIsSaving] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isCleaning, setIsCleaning] = useState(false);
     const [ntpStatus, setNtpStatus] = useState({
         status: 'unknown',
         offset: 0,
@@ -404,8 +405,25 @@ export const SystemConfig: React.FC = () => {
         }
     };
 
-    const handleCleanDb = () => {
-        notify('warning', t('op_success', lang), t('op_db_cleaned', lang));
+    const handleCleanDb = async () => {
+        if (isCleaning) return;
+        setIsCleaning(true);
+        try {
+            const token = localStorage.getItem('prts_token');
+            const res = await fetch('/api/v1/system/db-clean', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                notify('warning', t('op_success', lang), t('op_db_cleaned', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to clean database');
+            }
+        } catch (e) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setIsCleaning(false);
+        }
     };
 
     // User Management Handlers
@@ -970,8 +988,18 @@ export const SystemConfig: React.FC = () => {
                                     <div>
                                         <h4 className="font-bold text-ark-text mb-4 border-b border-ark-border pb-2">{t('sc_db_maintenance', lang)}</h4>
                                         <div className="flex gap-4">
-                                            <ArkButton variant="outline" onClick={handleCleanDb} className="flex-1 justify-center">
-                                                <Trash2 size={14} className="mr-2"/> {t('sc_db_clean', lang)}
+                                            <ArkButton 
+                                                variant="outline" 
+                                                onClick={handleCleanDb} 
+                                                className="flex-1 justify-center"
+                                                disabled={isCleaning}
+                                            >
+                                                {isCleaning ? (
+                                                    <RefreshCw size={14} className="mr-2 animate-spin" />
+                                                ) : (
+                                                    <Trash2 size={14} className="mr-2"/>
+                                                )}
+                                                {t('sc_db_clean', lang)}
                                             </ArkButton>
                                             <ArkButton variant="primary" onClick={handleSave} loading={isSaving} className="flex-1 justify-center">
                                                 <Save size={14} className="mr-2"/> {t('sc_db_backup', lang)}

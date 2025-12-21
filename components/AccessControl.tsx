@@ -9,12 +9,12 @@ import { AccessControlRule } from '../types';
 import { authFetch } from '../services/aiService';
 
 // 复用自律防御的切换开关组件
-const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ checked, onChange }) => (
+const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void, loading?: boolean }> = ({ checked, onChange, loading }) => (
     <div 
-        onClick={(e) => { e.stopPropagation(); onChange(); }}
-        className={`w-8 h-4 rounded-full relative cursor-pointer transition-colors duration-300 ${checked ? 'bg-ark-primary' : 'bg-ark-subtext/30'}`}
+        onClick={(e) => { e.stopPropagation(); if (!loading) onChange(); }}
+        className={`w-8 h-4 rounded-full relative transition-colors duration-300 ${loading ? 'bg-ark-subtext/20 cursor-wait' : checked ? 'bg-ark-primary cursor-pointer' : 'bg-ark-subtext/30 cursor-pointer'}`}
     >
-        <div className={`absolute top-0.5 left-0.5 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+        <div className={`absolute top-0.5 left-0.5 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${loading ? 'animate-pulse opacity-50' : checked ? 'translate-x-4' : 'translate-x-0'}`} />
     </div>
 );
 
@@ -28,6 +28,7 @@ export const AccessControl: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const isSyncingRef = React.useRef(false);
     const [nodeStates, setNodeStates] = useState<Record<string, boolean>>({});
+    const [pendingToggles, setPendingToggles] = useState<Set<string>>(new Set());
     const lastNotifiedStatus = React.useRef<Record<string, string>>({});
     const lastNotifiedError = React.useRef<Record<string, string>>({});
     const lastNotifiedInfo = React.useRef<Record<string, string>>({});
@@ -43,6 +44,11 @@ export const AccessControl: React.FC = () => {
             // Force sync state off immediately
             setIsSyncing(false);
             isSyncingRef.current = false;
+            setPendingToggles(prev => {
+                const next = new Set(prev);
+                next.delete(updatedNode.id);
+                return next;
+            });
 
             // Show notification if we were syncing OR if there's an error
             // This ensures errors from toggle switches (which don't set isSyncing) are still shown
@@ -80,6 +86,16 @@ export const AccessControl: React.FC = () => {
                     ...prev,
                     [updatedNode.id]: updatedNode.firewallStatus === 'active'
                 }));
+
+                // Clear pending toggle if status matches
+                setPendingToggles(prev => {
+                    if (prev.has(updatedNode.id)) {
+                        const next = new Set(prev);
+                        next.delete(updatedNode.id);
+                        return next;
+                    }
+                    return prev;
+                });
 
                 const wasSyncing = isSyncingRef.current;
                 const hasStatusChanged = lastNotifiedStatus.current[updatedNode.id] !== updatedNode.firewallStatus;
@@ -207,6 +223,12 @@ export const AccessControl: React.FC = () => {
         const newState = !nodeStates[id];
         const command = newState ? 'ENABLE_FIREWALL' : 'DISABLE_FIREWALL';
         
+        setPendingToggles(prev => {
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+        });
+
         try {
             const token = localStorage.getItem('prts_token');
             const response = await fetch('/api/v1/nodes/command', {
@@ -219,13 +241,22 @@ export const AccessControl: React.FC = () => {
             });
 
             if (response.ok) {
-                setNodeStates(prev => ({ ...prev, [id]: newState }));
-                notify(newState ? 'success' : 'warning', t('op_success', lang), `${name}: ${newState ? t('ac_fw_active', lang) : t('ac_fw_disabled', lang)}`);
+                notify('info', t('op_success', lang), `${name}: ${t('op_command_sent', lang)}`);
             } else {
+                setPendingToggles(prev => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
                 notify('error', t('op_failed', lang), 'Failed to send command');
             }
         } catch (error) {
             console.error('Failed to toggle firewall:', error);
+            setPendingToggles(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
             notify('error', t('op_failed', lang), 'Network error');
         }
     };
@@ -410,6 +441,7 @@ export const AccessControl: React.FC = () => {
                                         <ToggleSwitch 
                                             checked={nodeStates[node.id]} 
                                             onChange={() => toggleNodeFirewall(node.id, node.name)} 
+                                            loading={pendingToggles.has(node.id)}
                                         />
                                     </div>
                                     <div className="text-xs font-mono text-ark-subtext truncate">{node.ip}</div>

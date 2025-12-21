@@ -45,6 +45,7 @@ func main() {
 		&model.Report{},
 		&model.LoginAttempt{},
 		&model.LoginPolicy{},
+		&model.ModuleStatus{},
 	)
 	if err != nil {
 		log.Fatal("failed to migrate database: ", err)
@@ -103,6 +104,7 @@ func main() {
 			protected.GET("/attacks", h.GetAttacks)
 			protected.GET("/nodes", h.GetNodes)
 			protected.POST("/nodes/command", h.HandleNodeCommand)
+			protected.DELETE("/nodes/:id", h.DeleteNode)
 			protected.GET("/stats/dashboard", h.GetDashboardStats)
 			protected.GET("/stats/system", h.GetSystemStats)
 
@@ -114,7 +116,9 @@ func main() {
 			// Config
 			protected.GET("/config", h.GetConfig)
 			protected.POST("/config", h.UpdateConfig)
+			protected.POST("/system/defense-level", h.UpdateDefenseLevel)
 			protected.POST("/system/ntp-sync", h.NtpSync)
+			protected.POST("/system/db-clean", h.CleanDatabase)
 
 			// Templates & Services
 			protected.GET("/templates", h.GetTemplates)
@@ -123,16 +127,30 @@ func main() {
 			protected.GET("/account-credentials", h.GetAccountCredentials)
 			protected.GET("/scans", h.GetScans)
 			protected.GET("/decoys", h.GetDecoys)
+			protected.POST("/decoys", h.DeployDecoy)
 			protected.GET("/samples", h.GetSamples)
+			protected.DELETE("/samples/:id", h.DeleteSample)
 			protected.GET("/vuln-rules", h.GetVulnRules)
+			protected.POST("/vuln-rules/:id", h.UpdateVulnRule)
+			protected.DELETE("/vuln-rules/:id", h.DeleteVulnRule)
 			protected.GET("/traffic-rules", h.GetTrafficRules)
+			protected.POST("/traffic-rules", h.CreateTrafficRule)
+			protected.POST("/traffic-rules/:id", h.UpdateTrafficRule)
+			protected.DELETE("/traffic-rules/:id", h.DeleteTrafficRule)
 			protected.GET("/defense-strategies", h.GetDefenseStrategies)
+			protected.POST("/defense-strategies/:id", h.UpdateDefenseStrategy)
+			protected.DELETE("/defense-strategies/:id", h.DeleteDefenseStrategy)
 			protected.GET("/access-rules", h.GetAccessControlRules)
 			protected.POST("/access-rules", h.CreateAccessControlRule)
 			protected.DELETE("/access-rules/:id", h.DeleteAccessControlRule)
 			protected.POST("/access-rules/sync", h.SyncAccessRules)
 			protected.GET("/login-logs", h.GetLoginLogs)
 			protected.GET("/reports", h.GetReports)
+			protected.POST("/reports", h.CreateReport)
+
+			// Modules
+			protected.GET("/modules", h.GetModules)
+			protected.POST("/modules/:name", h.UpdateModule)
 
 			// User Management
 			protected.GET("/users", h.GetUsers)

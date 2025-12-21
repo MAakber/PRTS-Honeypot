@@ -72,6 +72,7 @@ const resources: Record<Lang, Record<string, string>> = {
     // Common
     op_success: "Success",
     op_failed: "Failed",
+    op_command_sent: "Command Sent",
     err_network: "Network communication failed.",
     err_incorrect_old_pwd: "Incorrect old password",
     err_account_locked: "Account locked due to too many failed attempts.",
@@ -814,6 +815,7 @@ const resources: Record<Lang, Record<string, string>> = {
     // Common
     op_success: "成功",
     op_failed: "失败",
+    op_command_sent: "指令已下发",
     err_network: "网络通信失败。",
     err_incorrect_old_pwd: "旧密码错误",
     err_account_locked: "由于多次尝试失败，账号已锁定。",

@@ -3,37 +3,62 @@ import React, { useState, useEffect } from 'react';
 import { ArkButton } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { FileText, Calendar, X, Inbox, ChevronDown, Plus, Download, Trash2, Eye } from 'lucide-react';
+import { FileText, Calendar, X, Inbox, ChevronDown, Plus, Download, Trash2, Eye, RefreshCw } from 'lucide-react';
 import { Report } from '../types';
 import { ArkDateRangePicker } from './ArkDateRangePicker';
+import { useNotification } from './NotificationSystem';
 
 export const ReportManagement: React.FC = () => {
-    const { lang } = useApp();
+    const { lang, authFetch } = useApp();
+    const { notify } = useNotification();
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'custom'>('daily');
     const [reports, setReports] = useState<Report[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
     const [dateRange, setDateRange] = useState({ start: '2025-11-30T00:00', end: '2025-12-06T23:59' });
 
-    useEffect(() => {
-        const fetchReports = async () => {
-            setIsLoading(true);
-            try {
-                const token = localStorage.getItem('prts_token');
-                const res = await fetch('/api/v1/reports', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    setReports(data);
-                }
-            } catch (e) {
-                console.error("Failed to fetch reports", e);
-            } finally {
-                setIsLoading(false);
+    const fetchReports = async () => {
+        setIsLoading(true);
+        try {
+            const res = await authFetch('/api/v1/reports');
+            if (res.ok) {
+                const data = await res.json();
+                setReports(data);
             }
-        };
+        } catch (e) {
+            console.error("Failed to fetch reports", e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchReports();
-    }, []);
+    }, [authFetch]);
+
+    const handleGenerate = async () => {
+        setIsGenerating(true);
+        try {
+            const response = await authFetch('/api/v1/reports', {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    name: `Report_${new Date().getTime()}`, 
+                    type: 'daily',
+                    creator: 'admin'
+                })
+            });
+            if (response.ok) {
+                notify('success', t('op_success', lang), t('op_report_generated', lang));
+                fetchReports();
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to generate report');
+            }
+        } catch (e) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     return (
         <div className="flex flex-col gap-4 pb-6 min-h-full">
@@ -89,8 +114,13 @@ export const ReportManagement: React.FC = () => {
                         </div>
                     </div>
 
-                    <ArkButton variant="ghost" className="h-[32px] px-4 whitespace-nowrap self-end xl:self-auto">
-                        <X size={14} className="mr-1" /> {t('filter_reset', lang)}
+                    <ArkButton 
+                        variant="ghost" 
+                        className="h-[32px] px-4 whitespace-nowrap self-end xl:self-auto"
+                        onClick={fetchReports}
+                        disabled={isLoading}
+                    >
+                        <RefreshCw size={14} className={`mr-1 ${isLoading ? 'animate-spin' : ''}`} /> {t('refresh', lang)}
                     </ArkButton>
                 </div>
 
@@ -99,8 +129,15 @@ export const ReportManagement: React.FC = () => {
                     <button className="flex items-center gap-2 px-4 py-1.5 bg-ark-panel border border-ark-border text-xs text-ark-text hover:border-ark-primary hover:text-ark-primary transition-colors">
                         {t('rm_btn_auto', lang)} <ChevronDown size={12} />
                     </button>
-                    <ArkButton variant="primary" size="sm" className="bg-ark-text text-ark-bg hover:bg-ark-primary hover:text-white whitespace-nowrap">
-                        <Plus size={14} className="mr-1" /> {t('rm_btn_new', lang)}
+                    <ArkButton 
+                        variant="primary" 
+                        size="sm" 
+                        className="bg-ark-text text-ark-bg hover:bg-ark-primary hover:text-white whitespace-nowrap"
+                        onClick={handleGenerate}
+                        disabled={isGenerating}
+                    >
+                        {isGenerating ? <RefreshCw size={14} className="mr-1 animate-spin" /> : <Plus size={14} className="mr-1" />}
+                        {t('rm_btn_new', lang)}
                     </ArkButton>
                 </div>
             </div>

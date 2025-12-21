@@ -17,7 +17,8 @@ import {
     Trash2,
     Activity,
     AlertTriangle,
-    ShieldAlert
+    ShieldAlert,
+    RefreshCw
 } from 'lucide-react';
 import { useNotification } from './NotificationSystem';
 
@@ -105,12 +106,12 @@ const FlowDiagram: React.FC<{ lang: Lang }> = ({ lang }) => {
 }
 
 // Custom Toggle Switch
-const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ checked, onChange }) => (
+const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void, loading?: boolean }> = ({ checked, onChange, loading }) => (
     <div 
-        onClick={onChange}
-        className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors duration-300 ${checked ? 'bg-ark-primary' : 'bg-ark-subtext/30'}`}
+        onClick={() => { if (!loading) onChange(); }}
+        className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors duration-300 ${checked ? 'bg-ark-primary' : 'bg-ark-subtext/30'} ${loading ? 'opacity-50 cursor-wait' : ''}`}
     >
-        <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+        <div className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${checked ? 'translate-x-5' : 'translate-x-0'} ${loading ? 'animate-pulse' : ''}`} />
     </div>
 );
 
@@ -119,8 +120,7 @@ export const VulnSimulation: React.FC = () => {
     const { notify } = useNotification();
     const [rules, setRules] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [enabled, setEnabled] = useState(true);
-
+    const [enabled, setEnabled] = useState(true);    const [pendingRules, setPendingRules] = useState<Set<string>>(new Set());
     const fetchRules = async () => {
         setLoading(true);
         try {
@@ -140,14 +140,56 @@ export const VulnSimulation: React.FC = () => {
         fetchRules();
     }, [authFetch]);
 
-    const toggleRuleStatus = (id: string) => {
-        setRules(prev => prev.map(r => r.id === id ? { ...r, status: r.status === 'active' ? 'inactive' : 'active' } : r));
-        notify('info', t('op_success', lang), t('op_rule_updated', lang));
+    const toggleRuleStatus = async (id: string) => {
+        const rule = rules.find(r => r.id === id);
+        if (!rule || pendingRules.has(id)) return;
+        
+        const newStatus = rule.status === 'active' ? 'inactive' : 'active';
+        setPendingRules(prev => new Set(prev).add(id));
+        try {
+            const response = await authFetch(`/api/v1/vuln-rules/${id}`, {
+                method: 'POST',
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (response.ok) {
+                setRules(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+                notify('info', t('op_success', lang), t('op_rule_updated', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to update rule status');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingRules(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
-    const handleDelete = (id: string) => {
-        setRules(prev => prev.filter(r => r.id !== id));
-        notify('error', t('op_success', lang), t('op_item_deleted', lang));
+    const handleDelete = async (id: string) => {
+        if (pendingRules.has(id)) return;
+        setPendingRules(prev => new Set(prev).add(id));
+        try {
+            const response = await authFetch(`/api/v1/vuln-rules/${id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                setRules(prev => prev.filter(r => r.id !== id));
+                notify('error', t('op_success', lang), t('op_item_deleted', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to delete rule');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingRules(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
     const handleToggle = () => {
@@ -293,7 +335,11 @@ export const VulnSimulation: React.FC = () => {
                                                 <td className="p-4 text-ark-subtext">{rule.lastHitTime}</td>
                                                 <td className="p-4 text-ark-text">{rule.creator}</td>
                                                 <td className="p-4">
-                                                    <ToggleSwitch checked={rule.status === 'active'} onChange={() => toggleRuleStatus(rule.id)} />
+                                                    <ToggleSwitch 
+                                                        checked={rule.status === 'active'} 
+                                                        onChange={() => toggleRuleStatus(rule.id)} 
+                                                        loading={pendingRules.has(rule.id)}
+                                                    />
                                                 </td>
                                                 <td className="p-4 text-ark-subtext">{rule.updateTime}</td>
                                                 <td className="p-4 text-ark-text">{rule.updater}</td>
@@ -302,8 +348,17 @@ export const VulnSimulation: React.FC = () => {
                                                         <button className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_edit', lang)}>
                                                             <Edit size={16} />
                                                         </button>
-                                                        <button onClick={() => handleDelete(rule.id)} className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('mc_delete', lang)}>
-                                                            <Trash2 size={16} />
+                                                        <button 
+                                                            onClick={() => handleDelete(rule.id)} 
+                                                            className={`text-ark-subtext hover:text-ark-danger transition-colors ${pendingRules.has(rule.id) ? 'opacity-50 cursor-wait' : ''}`} 
+                                                            title={t('mc_delete', lang)}
+                                                            disabled={pendingRules.has(rule.id)}
+                                                        >
+                                                            {pendingRules.has(rule.id) ? (
+                                                                <RefreshCw size={16} className="animate-spin" />
+                                                            ) : (
+                                                                <Trash2 size={16} />
+                                                            )}
                                                         </button>
                                                     </div>
                                                 </td>

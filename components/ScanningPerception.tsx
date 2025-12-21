@@ -66,6 +66,7 @@ export const ScanningPerception: React.FC = () => {
     const [dateRange, setDateRange] = useState({ start: '2023-10-24T00:00', end: '2023-10-24T23:59' });
     const [logs, setLogs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isToggling, setIsToggling] = useState(false);
 
     const fetchLogs = async () => {
         setLoading(true);
@@ -86,10 +87,16 @@ export const ScanningPerception: React.FC = () => {
         fetchLogs();
     }, [authFetch]);
 
-    const handleToggle = () => {
+    const handleToggle = async () => {
+        setIsToggling(true);
         const newState = !enabled;
-        toggleModule('scanning');
-        notify(newState ? 'success' : 'warning', t('op_success', lang), newState ? t('msg_module_on', lang) : t('msg_module_off', lang));
+        const success = await toggleModule('scanning');
+        if (success) {
+            notify(newState ? 'success' : 'warning', t('op_success', lang), newState ? t('msg_module_on', lang) : t('msg_module_off', lang));
+        } else {
+            notify('error', t('op_failed', lang), 'Failed to update module status');
+        }
+        setIsToggling(false);
     };
 
     return (
@@ -114,10 +121,13 @@ export const ScanningPerception: React.FC = () => {
                                  {/* Toggle Switch - Positioned right next to title */}
                                  <button 
                                     onClick={handleToggle}
-                                    className={`relative w-12 h-6 rounded-full transition-colors duration-300 shrink-0 cursor-pointer ml-2 ${enabled ? 'bg-ark-primary' : 'bg-ark-subtext/30'}`}
+                                    disabled={isToggling}
+                                    className={`relative w-12 h-6 rounded-full transition-colors duration-300 shrink-0 cursor-pointer ml-2 ${enabled ? 'bg-ark-primary' : 'bg-ark-subtext/30'} ${isToggling ? 'opacity-50 cursor-wait' : ''}`}
                                     aria-label="Toggle Scanning Perception"
                                  >
-                                    <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                    <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm flex items-center justify-center ${enabled ? 'translate-x-6' : 'translate-x-0'}`}>
+                                        {isToggling && <RefreshCw size={10} className="text-ark-primary animate-spin" />}
+                                    </div>
                                  </button>
                              </div>
                          </div>
@@ -171,11 +181,22 @@ export const ScanningPerception: React.FC = () => {
                  {/* Actions */}
                  <div className="flex justify-end mt-4 pt-3 border-t border-ark-border border-dashed">
                      <div className="flex gap-2 w-full md:w-auto">
-                         <ArkButton variant="ghost" size="sm" className="gap-2 flex-1 md:flex-none justify-center">
+                         <ArkButton 
+                            variant="ghost" 
+                            size="sm" 
+                            className="gap-2 flex-1 md:flex-none justify-center"
+                            onClick={() => notify('info', t('op_info', lang), 'Scanning configuration is coming soon')}
+                         >
                              <Settings size={14} /> {t('btn_scanning_config', lang)}
                          </ArkButton>
-                         <ArkButton variant="primary" size="sm" className="gap-2 flex-1 md:flex-none justify-center">
-                             <RefreshCw size={14} /> {t('refresh', lang)}
+                         <ArkButton 
+                            variant="primary" 
+                            size="sm" 
+                            className="gap-2 flex-1 md:flex-none justify-center"
+                            onClick={fetchLogs}
+                            disabled={loading}
+                         >
+                             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> {t('refresh', lang)}
                          </ArkButton>
                      </div>
                  </div>

@@ -97,6 +97,12 @@ type Template struct {
 	Config      string `json:"config"` // JSON string
 }
 
+type ModuleStatus struct {
+	ID      uint   `gorm:"primaryKey" json:"id"`
+	Name    string `gorm:"uniqueIndex" json:"name"`
+	Enabled bool   `json:"enabled"`
+}
+
 type Service struct {
 	ID               string `json:"id" gorm:"primaryKey"`
 	Name             string `json:"name"`

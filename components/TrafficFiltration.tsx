@@ -4,17 +4,17 @@ import { createPortal } from 'react-dom';
 import { ArkPageHeader, ArkButton, ArkInput } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { Filter, Search, Plus, Trash2, X, Save, Regex, ChevronRight } from 'lucide-react';
+import { Filter, Search, Plus, Trash2, X, Save, Regex, ChevronRight, RefreshCw } from 'lucide-react';
 import { useNotification } from './NotificationSystem';
 import { TrafficRule } from '../types';
 import { authFetch } from '../services/aiService';
 
-const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void }> = ({ checked, onChange }) => (
+const ToggleSwitch: React.FC<{ checked: boolean, onChange: () => void, loading?: boolean }> = ({ checked, onChange, loading }) => (
     <div 
-        onClick={(e) => { e.stopPropagation(); onChange(); }}
-        className={`w-8 h-4 rounded-full relative cursor-pointer transition-colors duration-300 ${checked ? 'bg-ark-primary' : 'bg-ark-subtext/30'}`}
+        onClick={(e) => { e.stopPropagation(); if (!loading) onChange(); }}
+        className={`w-8 h-4 rounded-full relative cursor-pointer transition-colors duration-300 ${checked ? 'bg-ark-primary' : 'bg-ark-subtext/30'} ${loading ? 'opacity-50 cursor-wait' : ''}`}
     >
-        <div className={`absolute top-0.5 left-0.5 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+        <div className={`absolute top-0.5 left-0.5 bg-white w-3 h-3 rounded-full transition-transform duration-300 shadow-sm ${checked ? 'translate-x-4' : 'translate-x-0'} ${loading ? 'animate-pulse' : ''}`} />
     </div>
 );
 
@@ -24,6 +24,7 @@ export const TrafficFiltration: React.FC = () => {
     const [rules, setRules] = useState<TrafficRule[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeCategoryKey, setActiveCategoryKey] = useState('tf_cat_all');
+    const [pendingRules, setPendingRules] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         fetchRules();
@@ -49,13 +50,56 @@ export const TrafficFiltration: React.FC = () => {
     const [formCategory, setFormCategory] = useState('Web Attack');
     const [formPattern, setFormPattern] = useState('');
 
-    const toggleRule = (id: string) => {
-        setRules(prev => prev.map(r => r.id === id ? { ...r, status: r.status === 'active' ? 'inactive' : 'active' } : r));
+    const toggleRule = async (id: string) => {
+        const rule = rules.find(r => r.id === id);
+        if (!rule || pendingRules.has(id)) return;
+
+        const newStatus = rule.status === 'active' ? 'inactive' : 'active';
+        setPendingRules(prev => new Set(prev).add(id));
+        try {
+            const response = await authFetch(`/api/v1/traffic-rules/${id}`, {
+                method: 'POST',
+                body: JSON.stringify({ status: newStatus })
+            });
+            if (response.ok) {
+                setRules(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+                notify('info', t('op_success', lang), t('op_rule_updated', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to update rule status');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingRules(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
-    const handleDelete = (id: string) => {
-        setRules(prev => prev.filter(r => r.id !== id));
-        notify('error', t('op_success', lang), t('op_item_deleted', lang));
+    const handleDelete = async (id: string) => {
+        if (pendingRules.has(id)) return;
+        setPendingRules(prev => new Set(prev).add(id));
+        try {
+            const response = await authFetch(`/api/v1/traffic-rules/${id}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                setRules(prev => prev.filter(r => r.id !== id));
+                notify('error', t('op_success', lang), t('op_item_deleted', lang));
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to delete rule');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        } finally {
+            setPendingRules(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
     const openAddModal = () => {
@@ -74,14 +118,13 @@ export const TrafficFiltration: React.FC = () => {
         }, 200);
     };
 
-    const handleSaveRule = () => {
+    const handleSaveRule = async () => {
         if (!formName || !formPattern) {
             notify('warning', t('op_failed', lang), lang === 'zh' ? "请填写规则名称和特征" : "Please fill in rule name and pattern");
             return;
         }
 
-        const newRule: TrafficRule = {
-            id: `T-${Date.now()}`,
+        const newRule = {
             name: formName,
             category: formCategory,
             pattern: formPattern,
@@ -89,9 +132,22 @@ export const TrafficFiltration: React.FC = () => {
             hits: 0
         };
 
-        setRules([newRule, ...rules]);
-        notify('success', t('op_success', lang), t('op_rule_added', lang));
-        closeAddModal();
+        try {
+            const response = await authFetch('/api/v1/traffic-rules', {
+                method: 'POST',
+                body: JSON.stringify(newRule)
+            });
+            if (response.ok) {
+                const savedRule = await response.json();
+                setRules([savedRule, ...rules]);
+                notify('success', t('op_success', lang), t('op_rule_added', lang));
+                closeAddModal();
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to save rule');
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), t('err_network', lang));
+        }
     };
 
     const categories = [
@@ -157,9 +213,21 @@ export const TrafficFiltration: React.FC = () => {
                                             <span className="text-[10px] text-ark-subtext uppercase">{t('tf_hits', lang)}</span>
                                         </div>
                                         <div className="h-8 w-[1px] bg-ark-border" />
-                                        <ToggleSwitch checked={rule.status === 'active'} onChange={() => toggleRule(rule.id)} />
-                                        <button onClick={() => handleDelete(rule.id)} className="text-ark-subtext hover:text-ark-danger transition-colors p-2">
-                                            <Trash2 size={16} />
+                                        <ToggleSwitch 
+                                            checked={rule.status === 'active'} 
+                                            onChange={() => toggleRule(rule.id)} 
+                                            loading={pendingRules.has(rule.id)}
+                                        />
+                                        <button 
+                                            onClick={() => handleDelete(rule.id)} 
+                                            className={`text-ark-subtext hover:text-ark-danger transition-colors p-2 ${pendingRules.has(rule.id) ? 'opacity-50 cursor-wait' : ''}`}
+                                            disabled={pendingRules.has(rule.id)}
+                                        >
+                                            {pendingRules.has(rule.id) ? (
+                                                <RefreshCw size={16} className="animate-spin" />
+                                            ) : (
+                                                <Trash2 size={16} />
+                                            )}
                                         </button>
                                     </div>
                                 </div>

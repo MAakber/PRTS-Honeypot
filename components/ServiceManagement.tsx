@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { ArkButton, ArkLoading } from './ArknightsUI';
 import { useApp } from '../AppContext';
 import { t } from '../i18n';
-import { X, ChevronLeft, ChevronRight, HelpCircle, FileEdit, Cloud } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, HelpCircle, FileEdit, Cloud, RefreshCw, Trash2 } from 'lucide-react';
 import { HoneypotService } from '../types';
+import { useNotification } from './NotificationSystem';
 
 const FilterInput: React.FC<{ label?: string, placeholder?: string, width?: string, children?: React.ReactNode }> = ({ label, placeholder, width = "w-full", children }) => (
     <div className={`flex items-center border border-ark-border bg-ark-panel h-[32px] ${width}`}>
@@ -26,36 +27,61 @@ const FilterSelect: React.FC<{ options: string[] }> = ({ options }) => (
 
 export const ServiceManagement: React.FC = () => {
     const { lang, authFetch } = useApp();
+    const { notify } = useNotification();
     const [services, setServices] = useState<HoneypotService[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
+
+    const fetchServices = async () => {
+        setLoading(true);
+        try {
+            const res = await authFetch('/api/v1/services');
+            if (res.ok) {
+                const data = await res.json();
+                const mapped = data.map((item: any) => ({
+                    id: item.id.toString(),
+                    name: item.name,
+                    category: item.category,
+                    interactionType: item.interaction_type,
+                    refTemplateCount: item.ref_template_count || 0,
+                    refNodeCount: item.ref_node_count || 0,
+                    defaultPort: item.default_port,
+                    description: item.description,
+                    isCloud: item.is_cloud
+                }));
+                setServices(mapped);
+            }
+        } catch (e) {
+            console.error("Failed to fetch services", e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchServices = async () => {
-            try {
-                const res = await authFetch('/api/v1/services');
-                if (res.ok) {
-                    const data = await res.json();
-                    const mapped = data.map((item: any) => ({
-                        id: item.id.toString(),
-                        name: item.name,
-                        category: item.category,
-                        interactionType: item.interaction_type,
-                        refTemplateCount: item.ref_template_count || 0,
-                        refNodeCount: item.ref_node_count || 0,
-                        defaultPort: item.default_port,
-                        description: item.description,
-                        isCloud: item.is_cloud
-                    }));
-                    setServices(mapped);
-                }
-            } catch (e) {
-                console.error("Failed to fetch services", e);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchServices();
     }, [authFetch]);
+
+    const handleDelete = async (id: string) => {
+        setPendingDeletes(prev => new Set(prev).add(id));
+        try {
+            const res = await authFetch(`/api/v1/services/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setServices(prev => prev.filter(s => s.id !== id));
+                notify('success', t('op_success', lang), 'Service deleted successfully');
+            } else {
+                notify('error', t('op_failed', lang), 'Failed to delete service');
+            }
+        } catch (e) {
+            notify('error', t('op_failed', lang), 'Network error');
+        } finally {
+            setPendingDeletes(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
+    };
 
     return (
         <div className="flex flex-col gap-4 pb-6 min-h-full">
@@ -73,8 +99,13 @@ export const ServiceManagement: React.FC = () => {
                          </FilterInput>
                      </div>
                      <div className="flex gap-2 justify-between xl:justify-start">
-                         <ArkButton variant="ghost" className="h-[32px] px-4 whitespace-nowrap">
-                            <X size={14} className="mr-1" /> {t('filter_reset', lang)}
+                         <ArkButton 
+                            variant="ghost" 
+                            className="h-[32px] px-4 whitespace-nowrap"
+                            onClick={fetchServices}
+                            disabled={loading}
+                         >
+                            <RefreshCw size={14} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> {t('refresh', lang)}
                          </ArkButton>
                          
                          <div className="flex-1 xl:flex-none flex justify-end">
@@ -138,9 +169,19 @@ export const ServiceManagement: React.FC = () => {
                                          </div>
                                      </td>
                                      <td className="p-4 text-center">
-                                         <button className="text-ark-subtext hover:text-ark-primary transition-colors" title="Edit">
-                                             <FileEdit size={14} />
-                                         </button>
+                                         <div className="flex items-center justify-center gap-3">
+                                             <button className="text-ark-subtext hover:text-ark-primary transition-colors" title="Edit">
+                                                 <FileEdit size={14} />
+                                             </button>
+                                             <button 
+                                                className={`text-ark-subtext hover:text-red-500 transition-colors ${pendingDeletes.has(service.id) ? 'opacity-50 cursor-wait' : ''}`} 
+                                                title="Delete"
+                                                onClick={() => handleDelete(service.id)}
+                                                disabled={pendingDeletes.has(service.id)}
+                                             >
+                                                 {pendingDeletes.has(service.id) ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                             </button>
+                                         </div>
                                      </td>
                                  </tr>
                              ))}

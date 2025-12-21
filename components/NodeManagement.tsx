@@ -147,6 +147,7 @@ export const NodeManagement: React.FC = () => {
     const { notify } = useNotification();
     const [nodes, setNodes] = useState<NodeStatus[]>([]);
     const [loading, setLoading] = useState(true);
+    const [pendingNodes, setPendingNodes] = useState<Record<string, string>>({}); // nodeId -> command
 
     const fetchNodes = async (showLoading = true) => {
         if (showLoading) setLoading(true);
@@ -174,18 +175,30 @@ export const NodeManagement: React.FC = () => {
         const handleNodeUpdate = (e: any) => {
             const updatedNode = e.detail;
             setNodes(prev => {
-                // If we are currently loading, we might want to skip this or handle it carefully
-                // but usually, we want the latest data.
                 const index = prev.findIndex(n => n.id === updatedNode.id);
-                if (index === -1) {
-                    // If it's a new node not in our list, add it
-                    return [updatedNode, ...prev];
-                }
-                
-                // Update existing node
+                if (index === -1) return [updatedNode, ...prev];
                 const newNodes = [...prev];
                 newNodes[index] = { ...newNodes[index], ...updatedNode };
                 return newNodes;
+            });
+
+            // Clear pending state if status matches command
+            setPendingNodes(prev => {
+                const command = prev[updatedNode.id];
+                if (!command) return prev;
+
+                const isSuccess = (command === 'START' && updatedNode.status === 'online') ||
+                                  (command === 'STOP' && updatedNode.status === 'offline') ||
+                                  (command === 'RESTART' && updatedNode.status === 'online');
+                
+                if (isSuccess) {
+                    const next = { ...prev };
+                    delete next[updatedNode.id];
+                    // Show success notification when node actually changes state
+                    notify('success', t('op_success', lang), `${updatedNode.name} is now ${updatedNode.status}`);
+                    return next;
+                }
+                return prev;
             });
         };
 
@@ -219,34 +232,68 @@ export const NodeManagement: React.FC = () => {
     };
 
     const handleStart = async (node: NodeStatus) => {
+        setPendingNodes(prev => ({ ...prev, [node.id]: 'START' }));
         const success = await sendCommand(node.id, 'START');
         if (success) {
-            notify('success', t('op_success', lang), `${t('op_node_start', lang)} (${node.name})`);
+            notify('info', t('op_success', lang), `${t('op_node_start', lang)}: ${t('op_command_sent', lang)} (${node.name})`);
         } else {
+            setPendingNodes(prev => {
+                const next = { ...prev };
+                delete next[node.id];
+                return next;
+            });
             notify('error', t('op_failed', lang), `Failed to send START command to ${node.name}`);
         }
     };
 
     const handleStop = async (node: NodeStatus) => {
+        setPendingNodes(prev => ({ ...prev, [node.id]: 'STOP' }));
         const success = await sendCommand(node.id, 'STOP');
         if (success) {
-            notify('warning', t('op_success', lang), `${t('op_node_stop', lang)} (${node.name})`);
+            notify('info', t('op_success', lang), `${t('op_node_stop', lang)}: ${t('op_command_sent', lang)} (${node.name})`);
         } else {
+            setPendingNodes(prev => {
+                const next = { ...prev };
+                delete next[node.id];
+                return next;
+            });
             notify('error', t('op_failed', lang), `Failed to send STOP command to ${node.name}`);
         }
     };
 
     const handleRestart = async (node: NodeStatus) => {
+        setPendingNodes(prev => ({ ...prev, [node.id]: 'RESTART' }));
         const success = await sendCommand(node.id, 'RESTART');
         if (success) {
-            notify('info', t('op_success', lang), `${t('op_node_restart', lang)} (${node.name})`);
+            notify('info', t('op_success', lang), `${t('op_node_restart', lang)}: ${t('op_command_sent', lang)} (${node.name})`);
         } else {
+            setPendingNodes(prev => {
+                const next = { ...prev };
+                delete next[node.id];
+                return next;
+            });
             notify('error', t('op_failed', lang), `Failed to send RESTART command to ${node.name}`);
         }
     };
 
-    const handleDelete = (nodeName: string) => {
-        notify('error', t('op_success', lang), `${t('op_node_delete', lang)} (${nodeName})`);
+    const handleDelete = async (nodeId: string, nodeName: string) => {
+        try {
+            const token = localStorage.getItem('prts_token');
+            const response = await fetch(`/api/v1/nodes/${nodeId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                notify('success', t('op_success', lang), `${t('op_node_delete', lang)} (${nodeName})`);
+                setNodes(prev => prev.filter(n => n.id !== nodeId));
+            } else {
+                notify('error', t('op_failed', lang), `Failed to delete node ${nodeName}`);
+            }
+        } catch (error) {
+            notify('error', t('op_failed', lang), `Network error while deleting node`);
+        }
     };
 
     return (
@@ -456,17 +503,26 @@ export const NodeManagement: React.FC = () => {
                                     
                                     {/* Action Bar */}
                                     <div className="bg-ark-active/5 p-2 flex justify-end gap-3 border-t border-ark-border">
-                                        <button onClick={() => handleStart(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
-                                            <Play size={12} /> {t('nm_btn_start', lang)}
-                                        </button>
-                                        <button onClick={() => handleStop(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
-                                            <Pause size={12} /> {t('nm_btn_stop', lang)}
-                                        </button>
-                                        <button onClick={() => handleRestart(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
-                                            <RefreshCw size={12} /> {t('nm_restart', lang)}
-                                        </button>
+                                        {pendingNodes[node.id] ? (
+                                            <div className="flex items-center gap-2 text-xs font-mono text-ark-primary animate-pulse mr-auto ml-4">
+                                                <RefreshCw size={12} className="animate-spin" />
+                                                {pendingNodes[node.id]}...
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <button onClick={() => handleStart(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
+                                                    <Play size={12} /> {t('nm_btn_start', lang)}
+                                                </button>
+                                                <button onClick={() => handleStop(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
+                                                    <Pause size={12} /> {t('nm_btn_stop', lang)}
+                                                </button>
+                                                <button onClick={() => handleRestart(node)} className="flex items-center gap-1 text-xs font-bold text-ark-subtext hover:text-ark-text transition-colors">
+                                                    <RefreshCw size={12} /> {t('nm_restart', lang)}
+                                                </button>
+                                            </>
+                                        )}
                                         <div className="w-[1px] h-4 bg-ark-border mx-2" />
-                                        <button onClick={() => handleDelete(node.name)} className="flex items-center gap-1 text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">
+                                        <button onClick={() => handleDelete(node.id, node.name)} className="flex items-center gap-1 text-xs font-bold text-red-500/70 hover:text-red-500 transition-colors">
                                             <X size={12} /> {t('nm_btn_delete', lang)}
                                         </button>
                                     </div>

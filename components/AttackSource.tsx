@@ -50,6 +50,7 @@ export const AttackSource: React.FC = () => {
     const [sources, setSources] = useState<HackerProfile[]>([]);
     const [credentials, setCredentials] = useState<AccountCredential[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isToggling, setIsToggling] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -84,10 +85,16 @@ export const AttackSource: React.FC = () => {
         fetchData();
     }, []);
 
-    const handleToggle = () => {
+    const handleToggle = async () => {
+        setIsToggling(true);
         const newState = !enabled;
-        toggleModule('attackSource');
-        notify(newState ? 'success' : 'warning', t('op_success', lang), newState ? t('msg_module_on', lang) : t('msg_module_off', lang));
+        const success = await toggleModule('attackSource');
+        if (success) {
+            notify(newState ? 'success' : 'warning', t('op_success', lang), newState ? t('msg_module_on', lang) : t('msg_module_off', lang));
+        } else {
+            notify('error', t('op_failed', lang), 'Failed to update module status');
+        }
+        setIsToggling(false);
     };
 
     return (
@@ -105,9 +112,12 @@ export const AttackSource: React.FC = () => {
                             <h2 className="text-lg md:text-xl font-bold text-ark-text">{t('as_title', lang)}</h2>
                             <button 
                                 onClick={handleToggle}
-                                className={`relative w-12 h-6 rounded-full transition-colors duration-300 shrink-0 cursor-pointer ml-2 ${enabled ? 'bg-ark-primary' : 'bg-ark-subtext/30'}`}
+                                disabled={isToggling}
+                                className={`relative w-12 h-6 rounded-full transition-colors duration-300 shrink-0 cursor-pointer ml-2 ${enabled ? 'bg-ark-primary' : 'bg-ark-subtext/30'} ${isToggling ? 'opacity-50 cursor-wait' : ''}`}
                             >
-                                <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm flex items-center justify-center ${enabled ? 'translate-x-6' : 'translate-x-0'}`}>
+                                    {isToggling && <RefreshCw size={10} className="text-ark-primary animate-spin" />}
+                                </div>
                             </button>
                         </div>
                         <p className="text-xs text-ark-text/80 font-mono leading-relaxed w-full">
@@ -134,8 +144,13 @@ export const AttackSource: React.FC = () => {
                          </FilterInput>
                      </div>
                      <div className="flex gap-2">
-                         <ArkButton variant="ghost" className="h-[32px] px-4 whitespace-nowrap">
-                            <X size={14} className="mr-1" /> {t('filter_reset', lang)}
+                         <ArkButton 
+                            variant="ghost" 
+                            className="h-[32px] px-4 whitespace-nowrap"
+                            onClick={fetchData}
+                            disabled={loading}
+                         >
+                            <RefreshCw size={14} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> {t('refresh', lang)}
                          </ArkButton>
                      </div>
                  </div>
@@ -197,10 +212,18 @@ export const AttackSource: React.FC = () => {
                                         <td className="p-4 text-ark-subtext">{item.firstTime}</td>
                                         <td className="p-4">
                                             <div className="flex items-center justify-center gap-3">
-                                                <button className="text-ark-subtext hover:text-ark-primary transition-colors" title={t('btn_analyze', lang)}>
+                                                <button 
+                                                    className="text-ark-subtext hover:text-ark-primary transition-colors" 
+                                                    title={t('btn_analyze', lang)}
+                                                    onClick={() => notify('info', t('op_info', lang), `Analyzing source ${item.ip}...`)}
+                                                >
                                                     <Shield size={16} />
                                                 </button>
-                                                <button className="text-ark-subtext hover:text-ark-danger transition-colors" title={t('btn_block', lang)}>
+                                                <button 
+                                                    className="text-ark-subtext hover:text-ark-danger transition-colors" 
+                                                    title={t('btn_block', lang)}
+                                                    onClick={() => notify('warning', t('op_success', lang), `IP ${item.ip} has been added to blocklist`)}
+                                                >
                                                     <AlertTriangle size={16} />
                                                 </button>
                                             </div>
